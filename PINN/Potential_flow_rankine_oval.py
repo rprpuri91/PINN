@@ -444,7 +444,7 @@ m  = 40
 
 a = 3.0
 
-b = 0.05
+b = 0.5
 
 def mesh_rankine_oval(m):
 
@@ -457,10 +457,10 @@ def mesh_rankine_oval(m):
     
     for i in range(len(X_in)):
         
-        if (x[i]<(a+b) and x[i]>(a-b)) and (y[i]<0.05 and y[i]>-0.05):
+        if (x[i]<(a+b) and x[i]>(a-b)) and (y[i]<0.5 and y[i]>-0.5):
             print(X_in[i])
             indices_domain.append(i)
-        elif (x[i]<-(a-b) and x[i]>-(a+b)) and (y[i]<0.05 and y[i]>-0.05):
+        elif (x[i]<-(a-b) and x[i]>-(a+b)) and (y[i]<0.5 and y[i]>-0.5):
             print(X_in[i])
             indices_domain.append(i)
    

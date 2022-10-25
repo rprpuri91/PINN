@@ -434,7 +434,7 @@ class Potential_flow():
         self.V_pred_np = data[0]
         self.V_test = data[1]
         self.indices = data[4]
-<<<<<<< HEAD
+
         #if pinn is True:
         self.bc_loss = data[5]
         self.in_loss = data[6]
@@ -447,7 +447,7 @@ class Potential_flow():
         self.out_loss = torch.tensor(self.out_loss).float().to(device)
         self.cylBc_loss = torch.tensor(self.cylBc_loss).float().to(device)
         self.domain_loss = torch.tensor(self.domain_loss).float().to(device)
-=======
+
         if pinn is True:
             self.bc_loss = data[5]
             self.in_loss = data[6]
@@ -460,7 +460,7 @@ class Potential_flow():
             self.out_loss = torch.tensor(self.out_loss).float().to(device)
             self.cylBc_loss = torch.tensor(self.cylBc_loss).float().to(device)
             self.domain_loss = torch.tensor(self.domain_loss).float().to(device)
->>>>>>> 9c150e5ac03cf7481d2b3b3dd99f469ccc28c54c
+
 
         self.V_pred = torch.from_numpy(self.V_pred_np).float().to(device)
 
@@ -600,19 +600,19 @@ def density_plot(x,y,u_test_grid,u_pred_grid,v_test_grid,v_pred_grid):
 
     u_test_min = u_test_grid.min()
     u_test_max = u_test_grid.max()
-<<<<<<< HEAD
+
     
     v_test_max = v_test_grid.max()
     v_test_min = v_test_grid.min()
     
-=======
+
     u_pred_min = u_pred_grid.min()
     u_pred_max = u_pred_grid.max()
     v_test_max = v_test_grid.max()
     v_test_min = v_test_grid.min()
     v_pred_max = v_pred_grid.max()
     v_pred_min = v_pred_grid.max()
->>>>>>> 9c150e5ac03cf7481d2b3b3dd99f469ccc28c54c
+
 
     fig, ax = plt.subplots(2, 2)
     c1=ax[0][0].pcolormesh(x,y, u_test_grid, shading = 'gouraud', label='u_x_exact', vmin=u_test_min, vmax= u_test_max, cmap=plt.get_cmap('rainbow'))
@@ -644,8 +644,7 @@ def density_plot(x,y,u_test_grid,u_pred_grid,v_test_grid,v_pred_grid):
 
     plt.show()
 
-<<<<<<< HEAD
-    ############################################################################################################################
+############################################################################################################################
 
 
 class Plotting():
@@ -803,14 +802,13 @@ data2 = pickle.load(file2)
 
 plot = Plotting(data2)
 
-#plot.density_plot_norm()
-#plot.streamplot()
+plot.density_plot_norm()
+plot.streamplot()
 plot.density_plot()
 
 ####################################################################################################
 
-=======
->>>>>>> 9c150e5ac03cf7481d2b3b3dd99f469ccc28c54c
+
 device = 'cpu'
 #device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f'Using {device} device')  
@@ -821,18 +819,18 @@ data0 = pickle.load(file0)
 data1 = pickle.load(file1)
 
 plot0 = Potential_flow(device,data0,True)
-<<<<<<< HEAD
+
 plot1 = Potential_flow(device,data1,False)
 
 #vector_field = vector_plot(plot0.x2,plot0.y2,plot0.u_test,plot0.v_test,plot0.u_pred,plot0.v_pred)
 #velocity = velocity_plot(plot0.V_pred_np,plot0.V_test)
 #density = density_plot(plot0.x,plot0.y,plot0.u_test_grid, plot0.u_pred_grid,plot0.v_test_grid,plot0.v_pred_grid)
-=======
+
 #plot1 = Potential_flow(device,data1,False)
 
 #vector_field = vector_plot(plot0.x2,plot0.y2,plot0.u_test,plot0.v_test,plot0.u_pred,plot0.v_pred)
 #velocity = velocity_plot(plot0.V_pred_np,plot0.V_test)
 density = density_plot(plot0.x,plot0.y,plot0.u_test_grid, plot0.u_pred_grid,plot0.v_test_grid,plot0.v_pred_grid)
->>>>>>> 9c150e5ac03cf7481d2b3b3dd99f469ccc28c54c
+
 #density2 = density_plot(plot1.x,plot1.y,plot1.u_test_grid, plot1.u_pred_grid,plot1.v_test_grid,plot1.v_pred_grid)
 #error_loss_plot = error_loss_plot(plot0.epochs,plot0.x1,plot0.error_cpu,plot0.loss_cpu,plot0.bc_loss,plot0.in_loss,plot0.out_loss,plot0.cylBc_loss ,plot0.domain_loss)

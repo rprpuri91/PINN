@@ -4,7 +4,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>04fa3da2-d6b0-4d2a-89db-38c133fdcb3f</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>PINN.py</StartupFile>
+    <StartupFile>Plotting.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>
@@ -24,7 +24,6 @@
   <ItemGroup>
     <Compile Include="BGK_pytorch.py" />
     <Compile Include="Burgers_pytorch.py" />
-    <Compile Include="module1.py" />
     <Compile Include="PINN.py" />
     <Compile Include="PINN_Potential_flow.py" />
     <Compile Include="Plotting.py" />
