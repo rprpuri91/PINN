@@ -6,6 +6,7 @@ import math
 import numpy as np
 import time
 import pickle
+import os
 import matplotlib.pyplot as plt
 import scipy as sc
 
@@ -15,7 +16,14 @@ torch.manual_seed(1234)
 
 np.random.seed(1234)
 
+cwd = os.getcwd()
 
+user = 'rishabh.puri'
+
+os.chdir()
+
+# Print the current working directory
+print("Current working directory: {0}".format(cwd))
 class Potential_flow_preprocessing():
     def __init__(self, R, U0,m,h,device,a):
 
@@ -93,7 +101,7 @@ class Potential_flow_preprocessing():
     def velocity_dataset(self):
 
       
-        X_domain, indices_domain = mesh_rankine_oval(self.m)
+        X_domain, indices_domain, X_boundary = mesh_rankine_oval(self.m)
         
         
         V_domain = self.velocity_rankine_oval(X_domain)
@@ -108,19 +116,19 @@ class Potential_flow_preprocessing():
 
         idx = np.random.choice(V_domain.shape[0], N_f, replace=False)
         V_domain2 = V_domain[idx, :]
-
+        V_boundary = self.velocity_rankine_oval(X_boundary)
 
         V_domain = torch.from_numpy(V_domain).float().to(self.device)
         V_inlet = torch.from_numpy(V_inlet).float().to(self.device)
         V_outlet = torch.from_numpy(V_outlet).float().to(self.device)
         V_wall = torch.from_numpy(V_wall).float().to(self.device)
         V_domain2 = torch.from_numpy(V_domain2).float().to(self.device)
-     
+        V_boundary = torch.from_numpy(V_boundary).float().to(self.device)
         V_max = V_domain.max()
         V_min = V_domain.min()
             
         
-        velocity = [V_domain, V_inlet, V_outlet, V_wall, V_domain2,V_max, V_min]
+        velocity = [V_domain, V_inlet, V_outlet, V_wall, V_domain2,V_boundary,V_max, V_min]
 
         #velocity = [V_domain,V_max,V_min]
 
@@ -185,17 +193,19 @@ class Rankine_oval_PINN(nn.Module):
 
         self.X_domain = X[0]
 
+        self.X_boundary = X[1]
+
         #print("X",type(X))
 
         N_f = int(0.3* len(self.X_domain))
 
         idx = np.random.choice(self.X_domain.shape[0], N_f, replace=False)
-        X_domain2 = X_domain[idx, :]
+        self.X_domain2 = X_domain[idx, :]
         
-        V_domain2 = V[4]
+        self.V_domain2 = V[4]
         self.V_domain  = V[0]
 
-        #self.V_domain2 = self.V_domain[idx,:]
+        self.V_boundary = V[5]
         
         self.V_inlet = V[1]
 
@@ -203,8 +213,8 @@ class Rankine_oval_PINN(nn.Module):
 
         self.V_wall = V[3]
 
-        self.V_min = V[5]
-        self.V_max = V[6]
+        self.V_min = V[6]
+        self.V_max = V[7]
 
         self.iter = 0
 
@@ -368,7 +378,7 @@ class Rankine_oval_PINN(nn.Module):
 
     def total_loss(self):
 
-        #loss_domain = self.loss(self.X_domain2,self.V_domain2)
+        loss_domain = self.loss(self.X_domain2,self.V_domain2)
 
         loss_inlet = self.loss(X_initial, self.V_inlet)
 
@@ -376,7 +386,9 @@ class Rankine_oval_PINN(nn.Module):
 
         loss_wall = self.loss(X_wall, self.V_wall)
 
-        total_loss =  loss_inlet + loss_outlet + loss_wall 
+        loss_boundary = self.loss(self.X_boundary, self.V_boundary)
+
+        total_loss =  loss_domain + loss_inlet + loss_outlet + loss_wall + loss_boundary
 
         return total_loss
 
@@ -450,11 +462,20 @@ def mesh_rankine_oval(m):
 
    
     indices_domain = []
+    indices_boundary = []
     
     x = X_in[:,0]
     y = X_in[:,1]
-        
-    
+
+    for i in range(len(X_in)):
+        t = (2 * a * y[i]) / ((x[i]) * (x[i]) + (y[i]) * (y[i]) - (a * a))
+        m0 = m / (2 * math.pi)
+
+        psi = - U0 * y[i] + m0 * math.atan(t)
+
+        if(psi < 0.05) and (psi > -0.05):
+            indices_boundary.append(i)
+
     for i in range(len(X_in)):
         
         if (x[i]<(a+b) and x[i]>(a-b)) and (y[i]<0.5 and y[i]>-0.5):
@@ -463,12 +484,15 @@ def mesh_rankine_oval(m):
         elif (x[i]<-(a-b) and x[i]>-(a+b)) and (y[i]<0.5 and y[i]>-0.5):
             print(X_in[i])
             indices_domain.append(i)
+
+
+    X_boundary = np.take(X_in, indices_boundary, axis=0)
    
     X_domain = np.delete(X_in, indices_domain, axis=0)
     
     print("domain",X_domain)
 
-    return  X_domain, indices_domain
+    return  X_domain, indices_domain, X_boundary
 
     
 
@@ -510,11 +534,11 @@ layers = np.array([2, 60, 60, 60,60,60, 2])
 
 nu = 0.8
 
-epochs = 10
+epochs = 1
 
-X_domain, indices_domain = mesh_rankine_oval(m)
+X_domain, indices_domain, X_boundary = mesh_rankine_oval(m)
 
-X = [X_domain, indices_domain,a]
+X = [X_domain, X_boundary, indices_domain,a]
 
 norm = True
 
