@@ -2,13 +2,15 @@
 import torch
 from torch import nn
 from math import cos, exp, sin, sqrt
-import math
+from math import pi, atan, isclose
 import numpy as np
 import time
 import pickle
+import h5py
 import os
 import matplotlib.pyplot as plt
 import scipy as sc
+from sympy import *
 
 #from torch_geometric.data import data
 
@@ -20,16 +22,16 @@ cwd = os.getcwd()
 
 user = 'rishabh.puri'
 
-os.chdir()
+#os.chdir()
 
 # Print the current working directory
 print("Current working directory: {0}".format(cwd))
 class Potential_flow_preprocessing():
-    def __init__(self, R, U0,m,h,device,a):
+    def __init__(self, U0,m,h,device,a):
 
         self.V_min = 0
         self.V_max = 0
-        self.R =R
+        #self.R =R
         self.U0 = U0
         self.m = m
         self.h = h
@@ -42,7 +44,7 @@ class Potential_flow_preprocessing():
 
 
         t = (2*self.a*y)/torch.sub((torch.square(x) + torch.square(y)), (self.a*self.a))
-        m0 = self.m/(2*math.pi)
+        m0 = self.m/(2*pi)
 
         psi = - self.U0*y + m0*torch.atan(t)
 
@@ -57,9 +59,11 @@ class Potential_flow_preprocessing():
 
         x3 = torch.divide(x1,x2)
 
-        m0 = self.m/(4*math.pi)
+        m0 = float(self.m/(4*pi))
 
-        phi = self.U0*x + m0*torch.log(x3)
+        #print(type(m0))
+
+        phi = self.U0*x + torch.mul(torch.log(x3),m0)
 
         return phi
 
@@ -68,7 +72,7 @@ class Potential_flow_preprocessing():
         x = X[:,0]
         y = X[:,1]
 
-        m0 = self.m/(2*math.pi)
+        m0 = self.m/(2*pi)
         a = self.a
 
         V = []
@@ -98,32 +102,29 @@ class Potential_flow_preprocessing():
         return V_xy
     
 
-    def velocity_dataset(self):
+    def velocity_dataset(self,X_domain,X_domain2, indices_domain, X_boundary):
 
-      
-        X_domain, indices_domain, X_boundary = mesh_rankine_oval(self.m)
-        
-        
-        V_domain = self.velocity_rankine_oval(X_domain)
+        #V_in = self.velocity_rankine_oval(X_in)
 
-        V_inlet = self.velocity_rankine_oval(X_initial)
+        V_domain = self.velocity_cartesian_vjp(X_domain)
+        print(V_domain)
+        V_inlet = self.velocity_cartesian_vjp(X_initial)
 
-        V_outlet = self.velocity_rankine_oval(X_outlet)
+        V_outlet = self.velocity_cartesian_vjp(X_outlet)
 
-        V_wall = self.velocity_rankine_oval(X_wall)
+        V_wall = self.velocity_cartesian_vjp(X_wall)
 
-        N_f = int(0.3* len(V_domain))
+        V_domain2 = self.velocity_cartesian_vjp(X_domain2)
+        V_boundary = self.velocity_cartesian_vjp(X_boundary)
 
-        idx = np.random.choice(V_domain.shape[0], N_f, replace=False)
-        V_domain2 = V_domain[idx, :]
-        V_boundary = self.velocity_rankine_oval(X_boundary)
-
-        V_domain = torch.from_numpy(V_domain).float().to(self.device)
+        #V_in = torch.from_numpy(V_in).float().to(self.device)
+        '''V_domain = torch.from_numpy(V_domain).float().to(self.device)
         V_inlet = torch.from_numpy(V_inlet).float().to(self.device)
         V_outlet = torch.from_numpy(V_outlet).float().to(self.device)
         V_wall = torch.from_numpy(V_wall).float().to(self.device)
-        V_domain2 = torch.from_numpy(V_domain2).float().to(self.device)
-        V_boundary = torch.from_numpy(V_boundary).float().to(self.device)
+        
+        V_boundary = torch.from_numpy(V_boundary).float().to(self.device)'''
+        #V_domain2 = torch.from_numpy(V_domain2).float().to(self.device)
         V_max = V_domain.max()
         V_min = V_domain.min()
             
@@ -152,10 +153,10 @@ class Potential_flow_preprocessing():
 
         v = torch.ones_like(x, device=self.device)
 
-        phi, phi_x_y = torch.autograd.functional.vjp(self.stream_fn_rankine_oval, g, v, create_graph=False)
+        phi, phi_x_y = torch.autograd.functional.vjp(self.potential_fn_rankine_oval, g, v, create_graph=False)
 
-        V_x = phi_x_y[1]
-        V_y = -phi_x_y[0]
+        V_x = phi_x_y[0]
+        V_y = phi_x_y[1]
 
         # print(V_y.size())
 
@@ -192,16 +193,13 @@ class Rankine_oval_PINN(nn.Module):
         self.device = device
 
         self.X_domain = X[0]
+        self.X_initial = X[1]
+        self.X_outlet = X[2]
+        self.X_wall = X[3]
+        self.X_domain2 = X[4]
 
-        self.X_boundary = X[1]
+        self.X_boundary = X[5]
 
-        #print("X",type(X))
-
-        N_f = int(0.3* len(self.X_domain))
-
-        idx = np.random.choice(self.X_domain.shape[0], N_f, replace=False)
-        self.X_domain2 = X_domain[idx, :]
-        
         self.V_domain2 = V[4]
         self.V_domain  = V[0]
 
@@ -213,8 +211,8 @@ class Rankine_oval_PINN(nn.Module):
 
         self.V_wall = V[3]
 
-        self.V_min = V[6]
-        self.V_max = V[7]
+        self.V_min = V[6][1]
+        self.V_max = V[6][0]
 
         self.iter = 0
 
@@ -277,6 +275,8 @@ class Rankine_oval_PINN(nn.Module):
         return V
 
     def train_test_data(self,X, V):
+
+
         
         N_u = int(self.nu * len(X))
 
@@ -380,11 +380,11 @@ class Rankine_oval_PINN(nn.Module):
 
         loss_domain = self.loss(self.X_domain2,self.V_domain2)
 
-        loss_inlet = self.loss(X_initial, self.V_inlet)
+        loss_inlet = self.loss(self.X_initial, self.V_inlet)
 
-        loss_outlet = self.loss(X_outlet, self.V_outlet)
+        loss_outlet = self.loss(self.X_outlet, self.V_outlet)
 
-        loss_wall = self.loss(X_wall, self.V_wall)
+        loss_wall = self.loss(self.X_wall, self.V_wall)
 
         loss_boundary = self.loss(self.X_boundary, self.V_boundary)
 
@@ -426,19 +426,32 @@ class Rankine_oval_PINN(nn.Module):
         return error_vec, V_pred
 
 
+########################################################################################################################
+h =0.02
 
-h =0.05
+dec = 2
 
 x_values = np.arange(-8.0, 8.0, h).tolist()
-y_values = np.arange(-4.0, 4.0, h).tolist()
+y_values = np.arange(-5.0, 5.0, h).tolist()
 x_values.append(8.0)
-y_values.append(4.0)
+y_values.append(5.0)
+
+
+x_values = [ round(elem, dec) for elem in x_values ]
+y_values = [ round(elem, dec) for elem in y_values ]
+print(y_values)
 
 x, y = np.meshgrid(x_values, y_values)
 
 U0 = 10.0
 
-R = 2.0
+#R = 2.0
+
+m  = 120.0
+
+a = 2.0
+
+b = a/6.0
 
 X_in = np.hstack([x.flatten()[:, None], y.flatten()[:, None]])
 
@@ -452,94 +465,248 @@ X_wall = np.vstack([X_bc_upper, X_bc_lower])
 
 X_outlet = np.hstack((x[-1, :][:, None], y[0, :][:, None]))
 
-m  = 40
-
-a = 3.0
-
-b = 0.5
+print('1')
 
 def mesh_rankine_oval(m):
 
    
     indices_domain = []
     indices_boundary = []
+    indices_inside_oval = []
+    solution = []
     
-    x = X_in[:,0]
-    y = X_in[:,1]
+    X = X_in[:,0]
+    Y = X_in[:,1]
+
+    X_list = X.tolist()
+    Y_list = Y.tolist()
+
+
+
 
     for i in range(len(X_in)):
-        t = (2 * a * y[i]) / ((x[i]) * (x[i]) + (y[i]) * (y[i]) - (a * a))
-        m0 = m / (2 * math.pi)
+        print(i)
+        if X[i]!=a and Y[i]!=0:
+            t = (2 * a * Y[i]) / ((X[i]) * (X[i]) + (Y[i]) * (Y[i]) - (a * a))
+            m0 = m / (2 * pi)
 
-        psi = - U0 * y[i] + m0 * math.atan(t)
+            psi = - (U0 * Y[i]) + (m0 * atan(t))
 
-        if(psi < 0.05) and (psi > -0.05):
-            indices_boundary.append(i)
+            if(psi < 0.1) and (psi > -0.1):
+                indices_boundary.append(i)
 
+
+    '''for i in range(len(X_in)):
+        print('equation')
+        yi = symbols('y')
+        #psi = - (U0 * y) + ((m / (2 * math.pi)) * math.atan(2 * a * y) / ((x[i]) * (x[i]) + (y * y) - (a * a)))
+        xi = X[i]
+        eq = Eq((- (U0 * yi) + (((m *7)/ (2 * 22)) * atan(2 * a * yi / ((xi * xi) + (yi * yi) - (a * a))))), yi, domain=S.Reals)
+
+        sol = solveset(eq)
+        print(len(X_in),i,sol)
+        solution.append(sol)'''
+
+
+
+    print('4')
     for i in range(len(X_in)):
         
-        if (x[i]<(a+b) and x[i]>(a-b)) and (y[i]<0.5 and y[i]>-0.5):
-            print(X_in[i])
+        if (X[i]<(a+b) and X[i]>(a-b)) and (Y[i]<b and Y[i]>-b):
+            #print(X_in[i])
             indices_domain.append(i)
-        elif (x[i]<-(a-b) and x[i]>-(a+b)) and (y[i]<0.5 and y[i]>-0.5):
-            print(X_in[i])
+        elif (X[i]<-(a-b) and X[i]>-(a+b)) and (Y[i]<b and Y[i]>-b):
+            #print(X_in[i])
             indices_domain.append(i)
 
 
     X_boundary = np.take(X_in, indices_boundary, axis=0)
-   
-    X_domain = np.delete(X_in, indices_domain, axis=0)
-    
-    print("domain",X_domain)
-
-    return  X_domain, indices_domain, X_boundary
-
-    
-
-#def dataset_rankine_oval():
-    
-    
-#    mesh_dataset = {}
-
-    
-#    for a in A:
-#        #print(a)
-#        X_domain, X_b, indices = mesh_rankine_oval(m,a)
-
-#        dataset = [X_domain, X_b, indices,a]
-        
-#        mesh_dataset["rankine"+str(a)] = dataset
 
 
-#    print(mesh_dataset.items())
+    X_domain_in =[]
 
-#    return mesh_dataset
+    print('2')
+    y_i = 0
+    x_i = 0
+
+    for i in range(len(X_boundary)-1):
+        print(X_boundary[i])
+        print(X_boundary[i+1])
+        print('old_y',y_i)
+
+        if isclose(X_boundary[i][1],0, abs_tol=0.001):
+            nox1 = int(2 * x_i / h)
+            #x1 = np.linspace(-x_i, x_i, nox1).tolist()
+
+            x1 = np.arange(-x_i, x_i, h).tolist()
+            x1 = [round(elem, dec) for elem in x1]
+            #x2 = np.arange(x_i, 8.0, h).tolist()
+            for j in x1:
+                X_domain_in.append([j, X_boundary[i][1]])
+            '''for k in x2:
+                X_domain_in.append([k, X_boundary[i][1]])'''
+
+        elif isclose(X_boundary[i][1], X_boundary[i+1][1], abs_tol=0.01) and isclose(X_boundary[i][0], -X_boundary[i+1][0], abs_tol=0.01):
+
+            if isclose(X_boundary[i][1],(y_i+h), abs_tol = 0.01)==False and y_i != 0:
+                h1 = X_boundary[i][1] - y_i
+                n = round(h1/h)
+                print('difference_scale',n)
+                while n!=0:
+                    y_i = round((y_i+h),dec)
+                    if y_i<0:
+                        x_i = round((x_i+h),dec)
+                    else:
+                        x_i = round((x_i - h), dec)
+                    x1 = np.arange(-x_i, x_i, h).tolist()
+                    x1 = [round(elem, dec) for elem in x1]
+                    print('new_y',y_i)
+                    for j in x1:
+                        X_domain_in.append([j, y_i])
+                    '''for k in x2:
+                        X_domain_in.append([k, y_i])'''
+                    n-=1
+            else:
+                nox1 = int(2*x_i/h)
+                #x1 = np.linspace(-x_i,x_i,nox1).tolist()
+                x_i = abs(X_boundary[i][0])
+                x1 = np.arange(-x_i, x_i, h).tolist()
+                x1 = [round(elem, dec) for elem in x1]
+                #x2 = np.arange(x_i, 8.0, h).tolist()
+                #print('x',x)
+                y_i = X_boundary[i][1]
+                print('new_y_',y_i)
+                for j in x1:
+                    X_domain_in.append([j, X_boundary[i][1]])
+                '''for k in x2:
+                    X_domain_in.append([k,X_boundary[i][1]])'''
 
 
 
+    print('thelist',X_domain_in)
+
+    X_domain_in_np = np.array(X_domain_in)
+    X_in_list = X_in.tolist()
+
+    #print(X_domain_in.round(2))
+
+    for i in range(len(X_in)):
+        print(i)
+        if X_in[i].tolist() in X_domain_in:
+            print('found')
+            print(X_in[i])
+            indices_inside_oval.append(i)
+
+
+    print("inside",indices_inside_oval)
+
+    X_domain = np.delete(X_in, indices_inside_oval, axis=0)
+
+    fig, ax = plt.subplots(1,2)
+    ax[0].scatter(X_domain[:,0],X_domain[:,1])
+    ax[1].scatter(X_domain_in_np[:,0],X_domain_in_np[:,1])\
+    #ax[1].scatter(X_domain[:,0],X_domain[:,1])
+    plt.show()
+
+    return  X_domain, indices_inside_oval, X_boundary
 
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f'Using {device} device')
 
 
-preprocessing = Potential_flow_preprocessing(R, U0,m,h,device,a)
+def sort_points(xy: np.ndarray) -> np.ndarray:
+    # normalize data  [-1, 1]
+    xy_sort = np.empty_like(xy)
+    xy_sort[:, 0] = 2 * (xy[:, 0] - np.min(xy[:, 0])) / (np.max(xy[:, 0] - np.min(xy[:, 0]))) - 1
+    xy_sort[:, 1] = 2 * (xy[:, 1] - np.min(xy[:, 1])) / (np.max(xy[:, 1] - np.min(xy[:, 1]))) - 1
 
-V = preprocessing.velocity_dataset()
-V_domain = V[0]
+    # get sort result
+    sort_array = np.arctan2(xy_sort[:, 0], xy_sort[:, 1])
+    sort_result = np.argsort(sort_array)
 
+    # apply sort result
+    return xy[sort_result]
 
+def data_generation():
+    preprocessing = Potential_flow_preprocessing( U0,m,h,device,a)
+    X_domain, indices_domain, X_boundary = mesh_rankine_oval(m)
+    N_f = int(0.3 * len(X_domain))
 
+    idx = np.random.choice(X_domain.shape[0], N_f, replace=False)
+    X_domain2 = X_domain[idx, :]
+    V = preprocessing.velocity_dataset(X_domain, X_domain2, indices_domain, X_boundary)
+
+    #[V_domain, V_inlet, V_outlet, V_wall, V_domain2, V_boundary, V_max, V_min]
+    h5 = h5py.File('data_rankine_oval_potential_flow.h5','w')
+    g1 = h5.create_group('coordinates')
+    g1.create_dataset('data1', data=X_domain)
+    g1.create_dataset('data2', data=X_initial)
+    g1.create_dataset('data3', data=X_outlet)
+    g1.create_dataset('data4', data=X_wall)
+    g1.create_dataset('data5', data=X_domain2)
+    g1.create_dataset('data6', data=X_boundary)
+    g1.create_dataset('data7', data=np.array(indices_domain))
+
+    g2 = h5.create_group('velocity')
+    g2.create_dataset('data1', data=V[0])
+    g2.create_dataset('data2', data=V[1])
+    g2.create_dataset('data3', data=V[2])
+    g2.create_dataset('data4', data=V[3])
+    g2.create_dataset('data5', data=V[4])
+    g2.create_dataset('data6', data=V[5])
+    g2.create_dataset('data7', data=np.array([V[6],V[7]]))
+
+    h5.close()
+
+#data_generation()
+
+######################################################################################################################
 layers = np.array([2, 60, 60, 60,60,60, 2])
 
 nu = 0.8
 
 epochs = 1
 
-X_domain, indices_domain, X_boundary = mesh_rankine_oval(m)
+h5 = h5py.File('data_rankine_oval_potential_flow.h5','r')
 
-X = [X_domain, X_boundary, indices_domain,a]
+X_group = h5.get('coordinates')
+V_group = h5.get('velocity')
 
+X_group.items()
+V_group.items()
+
+X_domain = np.array(X_group.get('data1'))
+X_inlet = np.array(X_group.get('data2'))
+X_outlet = np.array(X_group.get('data3'))
+X_wall = np.array(X_group.get('data4'))
+X_domain2 = np.array(X_group.get('data5'))
+X_boundary = np.array(X_group.get('data6'))
+indices_domain = np.array(X_group.get('data7'))
+
+X_boundary_sort = sort_points(X_boundary)
+
+
+X = [X_domain,X_inlet,X_outlet,X_wall,X_domain2,X_boundary]
+
+V_domain = np.array(V_group.get('data1'))
+V_inlet = np.array(V_group.get('data2'))
+V_outlet = np.array(V_group.get('data3'))
+V_wall = np.array(V_group.get('data4'))
+V_domain2 = np.array(V_group.get('data5'))
+V_boundary = np.array(V_group.get('data6'))
+V_limit = np.array(V_group.get('data7'))
+V_domain = torch.from_numpy(V_domain).float().to(device)
+V_inlet = torch.from_numpy(V_inlet).float().to(device)
+V_outlet = torch.from_numpy(V_outlet).float().to(device)
+V_wall = torch.from_numpy(V_wall).float().to(device)
+V_domain2 = torch.from_numpy(V_domain2).float().to(device)
+V_boundary = torch.from_numpy(V_boundary).float().to(device)
+V_limit = torch.from_numpy(V_limit).float().to(device)
+
+V = [V_domain,V_inlet,V_outlet,V_wall,V_domain2,V_boundary,V_limit]
+
+V_domain = V[0]
 norm = True
 
 model = Rankine_oval_PINN(layers,nu,X,V, norm,device)
@@ -562,12 +729,13 @@ print('Training time: %.2f' % (elapsed))
 V_domain_norm = model.normalize_velocity(V_domain)
 X_domain =  torch.from_numpy(X_domain).float().to(device)
 
-error, V_pred_norm = model.test(model,X_domain, V_domain_norm) 
+
+error, V_pred_norm = model.test(model,X_domain, V_domain_norm)
 print(error)
 
 V_pred = model.denormalize_velocity(V_pred_norm)
 
-result = [V_pred,V_domain, V_pred_norm, V_domain_norm,indices_domain, model.error, model.training_loss]
+result = [V_pred,V_domain, V_pred_norm, V_domain_norm,indices_domain, model.error, model.training_loss,X_boundary_sort]
 f = open('result_rankine_oval_potential_flow.pkl', 'wb')
 pickle.dump(result, f)
 f.close()

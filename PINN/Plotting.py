@@ -659,28 +659,49 @@ class Plotting():
         V_pred_norm = self.result[2]
         V_in_norm = self.result[3]
         indices = self.result[4]
+        self.X_boundary_sort = self.result[-1]
         print(V_in_norm)
 
-        h =0.05
+        h = 0.02
+        x_min = -8.0
+        x_max = 8.0
+        y_min = -4.0
+        y_max = 4.0
 
-        #plt.hist(V_in[:,0].cpu().detach().numpy())
+        nox = int((x_max - x_min) / h)
+        noy = int((y_max - y_min) / h)
+        print(nox)
+        print(noy)
 
-        x_values = np.arange(-8.0, 8.0, h).tolist()
-        y_values = np.arange(-4.0, 4.0, h).tolist()
-        x_values.append(8.0)
-        y_values.append(4.0)
+        dec = 1
+
+        #x_values = np.linspace(x_min, x_max, nox).tolist()
+        #y_values = np.linspace(y_min, y_max, noy).tolist()
+
+        #print(y_values)
+
+        x_values1 = np.arange(-8.0, 8.0, h).tolist()
+        y_values1 = np.arange(-5.0, 5.0, h).tolist()
+        x_values1.append(8.0)
+        y_values1.append(5.0)
+        x_values = [round(elem, dec) for elem in x_values1]
+        y_values = [round(elem, dec) for elem in y_values1]
+
 
         self.x, self.y = np.meshgrid(x_values, y_values)
-
+        self.x1, self.y1= np.meshgrid(x_values1, y_values1)
+        #plt.hist(V_in[:,0].cpu().detach().numpy())
         X_in = np.hstack([self.x.flatten()[:, None], self.y.flatten()[:, None]])
         X_in1 = torch.from_numpy(X_in).float().to(device)
+
+        #X_in1 = torch.from_numpy(X_in).float().to(device)
 
         v_test_in_norm = torch.zeros_like(X_in1, device= device, dtype=torch.float64)
         v_pred_in_norm = torch.zeros_like(X_in1, device= device, dtype=torch.float64)
         v_test_in = torch.zeros_like(X_in1, device= device, dtype=torch.float64)
         v_pred_in = torch.zeros_like(X_in1, device= device, dtype=torch.float64)
 
-        count = 0
+        c = 0
 
         for i in range(X_in1.size()[0]):
             if i in indices:
@@ -689,11 +710,11 @@ class Plotting():
                 v_test_in_norm[i]=0
                 v_pred_in_norm[i]=0
             else:
-                v_test_in[i]=self.V_in[count]
-                v_pred_in[i]=self.V_pred[count]
-                v_test_in_norm[i]=V_in_norm[count]
-                v_pred_in_norm[i]=V_pred_norm[count]
-                count+=1
+                v_test_in[i]=self.V_in[c]
+                v_pred_in[i]=self.V_pred[c]
+                v_test_in_norm[i]=V_in_norm[c]
+                v_pred_in_norm[i]=V_pred_norm[c]
+                c+=1
 
                      
         up = v_pred_in[:,0]
@@ -783,12 +804,16 @@ class Plotting():
 
     def streamplot(self):
 
-        fig, ax = plt.subplots(1,2)
-        s1 = ax[0].streamplot(self.x,self.y,self.u0_grid, self.v0_grid, density=2,color = self.U_grid, cmap='rainbow')
+        fig, ax = plt.subplots(2,1)
+        s1 = ax[0].streamplot(self.x1,self.y1,self.u0_grid, self.v0_grid, density=2,color = self.U_grid, cmap='rainbow')
         fig.colorbar(s1.lines, ax =ax[0])
+        ax[0].plot(self.X_boundary_sort[:,0], self.X_boundary_sort[:,1], color='black')
+        ax[0].hlines(y=0,xmin=-8.0,xmax=8.0, color='black')
 
-        s2 = ax[1].streamplot(self.x,self.y,self.u_grid, self.v_grid, density=2, color = self.U_grid, cmap='rainbow')
+        s2 = ax[1].streamplot(self.x1,self.y1,self.u_grid, self.v_grid, density=2, color = self.U_grid, cmap='rainbow')
         fig.colorbar(s2.lines, ax=ax[1])
+        ax[1].plot(self.X_boundary_sort[:, 0], self.X_boundary_sort[:, 1], color='black')
+        ax[1].hlines(y=0, xmin=-8.0, xmax=8.0, color='black')
 
         plt.show()
 
@@ -802,9 +827,9 @@ data2 = pickle.load(file2)
 
 plot = Plotting(data2)
 
-plot.density_plot_norm()
+#plot.density_plot_norm()
 plot.streamplot()
-plot.density_plot()
+#plot.density_plot()
 
 ####################################################################################################
 

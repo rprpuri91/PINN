@@ -1,10 +1,11 @@
+import math
+import pickle
+import time
+from math import sqrt
+
+import numpy as np
 import torch
 from torch import nn
-from math import cos, exp, sin, sqrt
-import math
-import numpy as np
-import time
-import pickle
 
 torch.manual_seed(1234)
 
@@ -45,7 +46,7 @@ class Potential_flow_PINN(nn.Module):
         self.cyl_bc_loss = []
         self.domain_loss = []
         self.V_max = 0
-        self.V_min  = 0
+        self.V_min = 0
 
         self.iter = 0
 
@@ -111,8 +112,8 @@ class Potential_flow_PINN(nn.Module):
 
         return V_norm
 
-    def denormalize_velocity(self,V_norm):
-        V = V_norm*(self.V_max - self.V_min) + self.V_min
+    def denormalize_velocity(self, V_norm):
+        V = V_norm * (self.V_max - self.V_min) + self.V_min
 
         return V
 
@@ -188,7 +189,7 @@ class Potential_flow_PINN(nn.Module):
 
         x1 = torch.square(x) + torch.square(y)
 
-        phi = U * x + Q / math.pi * (torch.divide(x, x1))  ## Ux + Q/pi(x/(x^2+y^2))
+        phi = U * x + Q * (torch.divide(x, x1)) / math.pi  ## Ux + Q/pi(x/(x^2+y^2))
 
         return phi
 
@@ -199,7 +200,7 @@ class Potential_flow_PINN(nn.Module):
         velocity = self.forward(g)
 
         # velocity = self.velocity_cartesian_vjp(g)
-        #velocity = self.denormalize_velocity(velocity_norm)
+        # velocity = self.denormalize_velocity(velocity_norm)
 
         return velocity
 
@@ -256,22 +257,27 @@ class Potential_flow_PINN(nn.Module):
         target2 = torch.zeros_like(vorticity, device=self.device)
 
         loss_laplace = self.loss_function(laplace_phi, target1)
-        #print(loss_laplace)
+        # print(loss_laplace)
 
         loss_vorticity = self.loss_function(vorticity, target2)
-        #print(loss_vorticity)
+        # print(loss_vorticity)
 
         # V_train_norm = torch.nn.functional.normalize(V_train, dim=1).float()
         loss_velocity = self.loss_function(V_pred, V_train)
-        #print(loss_velocity)
+        # print(loss_velocity)
 
         loss = loss_laplace + loss_velocity + loss_vorticity
 
         return loss
 
+    def loss_domain(self,X):
+        X_train, _, V_train, _ = self.training_test_data(X)
+        loss_velocity = self.loss_function(V_pred, V_train)
+        return loss_velocity
+
     def loss_total(self):
 
-        X_initial, X_bc, X_outlet, X_domain,X_in_domain, X_cyl_bc, indices = preprocessing()
+        X_initial, X_bc, X_outlet, X_domain, X_in_domain, X_cyl_bc, indices = preprocessing()
 
         loss_initial = self.loss(X_initial)
         self.inlet_loss.append(loss_initial)
@@ -282,10 +288,10 @@ class Potential_flow_PINN(nn.Module):
         loss_outlet = self.loss(X_outlet)
         self.outlet_loss.append(loss_outlet)
 
-        loss_cyl_bc = 0.1*self.loss(X_cyl_bc)
+        loss_cyl_bc = 0.1 * self.loss(X_cyl_bc)
         self.cyl_bc_loss.append(loss_cyl_bc)
 
-        loss_domain = self.loss(X_in_domain)
+        loss_domain = self.loss_domain(X_in_domain)
         self.domain_loss.append(loss_domain)
 
         total_loss = loss_initial + loss_bc + loss_cyl_bc + loss_outlet + loss_domain
@@ -379,14 +385,14 @@ def preprocessing():
 
     X_cyl_bc = np.take(X_in, indices_R, axis=0)
 
-    X_domain2 = np.delete(X_in,indices,axis=0)
+    X_domain2 = np.delete(X_in, indices, axis=0)
 
     N_x = int(0.2 * len(X_domain2))
     idx = np.random.choice(X_domain2.shape[0], N_x, replace=False)
 
     X_domain2 = X_domain2[idx, :]
 
-    return X_initial, X_bc, X_outlet, X_domain,X_domain2, X_cyl_bc, indices_inR
+    return X_initial, X_bc, X_outlet, X_domain, X_domain2, X_cyl_bc, indices_inR
 
 
 # device = 'cpu'
@@ -396,17 +402,17 @@ print(f'Using {device} device')
 R = 2.0  ##Radius cylinder
 U = 10.0  ##Velocity Inlet
 
-layers = np.array([2, 60, 60, 60,60,60, 2])
+layers = np.array([2, 60, 60, 60, 60, 60, 2])
 
 nu = 0.8
 
 epochs = 5000
 
-X_initial, X_bc, X_outlet, X_domain,_, X_cyl_bc, indices = preprocessing()
+X_initial, X_bc, X_outlet, X_domain, _, X_cyl_bc, indices = preprocessing()
 
 X_train_test = np.concatenate((X_initial, X_bc, X_outlet, X_cyl_bc))
 
-#print(X_cyl_bc.shape)
+# print(X_cyl_bc.shape)
 
 model = Potential_flow_PINN(layers, device, R, U, nu)
 print('model created')
@@ -417,7 +423,6 @@ V_domain = model.velocity_cartesian_vjp(X_domain)
 
 model.V_max = torch.max(V_domain)
 model.V_min = torch.min(V_domain)
-
 
 model.norm = True
 X_in_train, X_test, V_train, V_test = model.training_test_data(X_train_test)
@@ -437,7 +442,6 @@ for epoch in range(0, epochs):
 elapsed = time.time() - start_time
 
 print('Training time: %.2f' % (elapsed))
-
 
 # print(V_domain.size())
 # V_domain_norm = torch.nn.functional.normalize(V_domain)
