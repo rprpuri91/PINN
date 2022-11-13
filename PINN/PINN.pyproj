@@ -4,7 +4,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>04fa3da2-d6b0-4d2a-89db-38c133fdcb3f</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>Plotting.py</StartupFile>
+    <StartupFile>PINN_Potential_flow.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>

@@ -20,7 +20,7 @@ cwd = os.getcwd()
 
 user = 'rishabh.puri'
 
-os.chdir()
+#os.chdir()
 
 # Print the current working directory
 print("Current working directory: {0}".format(cwd))
@@ -534,7 +534,7 @@ layers = np.array([2, 60, 60, 60,60,60, 2])
 
 nu = 0.8
 
-epochs = 1
+epochs = 3000
 
 X_domain, indices_domain, X_boundary = mesh_rankine_oval(m)
 

@@ -321,7 +321,7 @@ class Potential_flow_PINN(nn.Module):
         error_vec = torch.linalg.norm((V_test - V_pred), 2) / torch.linalg.norm(V_test,
                                                                                 2)  # Relative L2 Norm of the error (vector)
 
-        V_pred = V_pred.cpu().detach().numpy()
+        #V_pred = V_pred.cpu().detach().numpy()
 
         return error_vec, V_pred
 
@@ -344,7 +344,7 @@ def preprocessing():
     x_values.append(8.0)
     y_values.append(4.0)
 
-    y, x = np.meshgrid(y_values, x_values)
+    x, y = np.meshgrid(x_values, y_values)
 
     X_in = np.hstack([x.flatten()[:, None], y.flatten()[:, None]])
 
@@ -400,13 +400,12 @@ layers = np.array([2, 60, 60, 60,60,60, 2])
 
 nu = 0.8
 
-epochs = 5000
+epochs = 1
 
 X_initial, X_bc, X_outlet, X_domain,_, X_cyl_bc, indices = preprocessing()
 
 X_train_test = np.concatenate((X_initial, X_bc, X_outlet, X_cyl_bc))
 
-#print(X_cyl_bc.shape)
 
 model = Potential_flow_PINN(layers, device, R, U, nu)
 print('model created')
@@ -445,11 +444,12 @@ V_domain_norm = model.normalize_velocity(V_domain)
 # print(V_domain_norm.size())
 X_domain = torch.from_numpy(X_domain).float().to(device)
 
-error_vec, V_pred = model.test(model, X_domain, V_domain_norm)
+error_vec, V_pred_norm = model.test(model, X_domain, V_domain_norm)
+V_pred = model.denormalize_velocity(V_pred_norm)
 print(error_vec)
 
-result = [V_pred, V_domain_norm, model.error, model.trainingloss, indices, model.bc_loss, model.inlet_loss,
-          model.outlet_loss, model.cyl_bc_loss, model.domain_loss]
+result = [V_pred_norm, V_domain_norm, model.error, model.trainingloss, indices, model.bc_loss, model.inlet_loss,
+          model.outlet_loss, model.cyl_bc_loss, model.domain_loss, V_pred, V_domain, X_cyl_bc]
 f = open('result_PINN_potential_flow.pkl', 'wb')
 pickle.dump(result, f)
 f.close()
