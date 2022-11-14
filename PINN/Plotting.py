@@ -431,7 +431,7 @@ class Potential_flow():
 
         self.error = data[2]
         self.loss = data[3]
-        self.V_pred_np = data[0]
+        self.V_pred_norm = data[0]
         self.V_test = data[1]
         self.indices = data[4]
 
@@ -441,6 +441,9 @@ class Potential_flow():
         self.out_loss = data[7]
         self.cylBc_loss = data[8]
         self.domain_loss = data[9]
+        self.V_pred = data[10]
+        self.V_domain = data[11]
+        self.x_cyl = data[12]
 
         self.bc_loss = torch.tensor(self.bc_loss).float().to(device)
         self.in_loss = torch.tensor(self.in_loss).float().to(device)
@@ -462,7 +465,7 @@ class Potential_flow():
             self.domain_loss = torch.tensor(self.domain_loss).float().to(device)
 
 
-        self.V_pred = torch.from_numpy(self.V_pred_np).float().to(device)
+        #self.V_pred = torch.from_numpy(self.V_pred_np).float().to(device)
 
         print(self.V_test.size())
 
@@ -481,13 +484,15 @@ class Potential_flow():
         x_values.append(8.0)
         y_values.append(4.0)
 
-        self.y, self.x = np.meshgrid(y_values, x_values)
+        self.x, self.y = np.meshgrid(x_values, y_values)
 
         self.X_in = np.hstack([self.x.flatten()[:, None], self.y.flatten()[:, None]])
 
         X_in1 = torch.from_numpy(self.X_in).float().to(device)
 
-        v_test_in = torch.zeros_like(X_in1, device= device, dtype=torch.float64)
+        v_test_norm_in = torch.zeros_like(X_in1, device= device, dtype=torch.float64)
+        v_pred_norm_in = torch.zeros_like(X_in1, device = device, dtype=torch.float64)
+        v_domain_in = torch.zeros_like(X_in1, device = device, dtype=torch.float64)
         v_pred_in = torch.zeros_like(X_in1, device = device, dtype=torch.float64)
 
         print('indices',self.indices)
@@ -495,12 +500,23 @@ class Potential_flow():
         count = 0
         for i in range(X_in1.size()[0]):
             if i in self.indices:
-                v_test_in[i]=0
-                v_pred_in[i]=0
+                v_test_norm_in[i]=0
+                v_pred_norm_in[i]=0
+                v_domain_in[i] = 0
+                v_pred_in[i] = 0
             else:
-                v_test_in[i]=self.V_test[count]
-                v_pred_in[i]=self.V_pred[count]
+                v_test_norm_in[i]=self.V_test[count]
+                v_pred_norm_in[i]=self.V_pred_norm[count]
+                v_domain_in[i] = self.V_domain[count]
+                v_pred_in[i] = self.V_pred[count]
                 count+=1
+
+        u0 = v_domain_in[:, 0]
+        v0 = v_domain_in[:, 1]
+
+        U = np.sqrt(np.square(u0.cpu().detach().numpy()) + np.square(v0.cpu().detach().numpy()))
+        # print('U',U)
+        self.U_grid = np.reshape(U, self.x.shape)
 
         N_u = int(0.05 * len(self.X_in))
         idx = np.random.choice(self.X_in.shape[0], N_u, replace=False)
@@ -510,139 +526,151 @@ class Potential_flow():
         self.y2 = X_in2[:,1]
 
         v_pred_in2 = v_pred_in[idx,:]
-        v_test_in2 = v_test_in[idx,:]
+        v_test_in2 = v_domain_in[idx,:]
 
         self.u_pred = v_pred_in2[:,0].cpu().detach().numpy()
         self.v_pred = v_pred_in2[:,1].cpu().detach().numpy()
         self.u_test = v_test_in2[:,0].cpu().detach().numpy()
         self.v_test = v_test_in2[:,1].cpu().detach().numpy()
 
-        #print(v_test_in)
-        self.u_pred_grid = torch.reshape(v_pred_in[:,0], self.x.shape).cpu().detach().numpy()
-        self.u_test_grid = torch.reshape(v_test_in[:,0], self.x.shape).cpu().detach().numpy()
+        self.u_pred_grid = torch.reshape(v_pred_in[:, 0], self.x.shape).cpu().detach().numpy()
+        self.u_test_grid = torch.reshape(v_domain_in[:, 0], self.x.shape).cpu().detach().numpy()
         self.v_pred_grid = torch.reshape(v_pred_in[:, 1], self.x.shape).cpu().detach().numpy()
-        self.v_test_grid = torch.reshape(v_test_in[:, 1], self.x.shape).cpu().detach().numpy()
+        self.v_test_grid = torch.reshape(v_domain_in[:, 1], self.x.shape).cpu().detach().numpy()
+
+        #print(v_test_in)
+        self.u_pred_norm_grid = torch.reshape(v_pred_norm_in[:,0], self.x.shape).cpu().detach().numpy()
+        self.u_test_norm_grid = torch.reshape(v_test_norm_in[:,0], self.x.shape).cpu().detach().numpy()
+        self.v_pred_norm_grid = torch.reshape(v_pred_norm_in[:, 1], self.x.shape).cpu().detach().numpy()
+        self.v_test_norm_grid = torch.reshape(v_test_norm_in[:, 1], self.x.shape).cpu().detach().numpy()
 
         #print(self.u_test_grid)
 
 
-def error_loss_plot(epochs,x1,error_cpu,loss_cpu, bc_loss,in_loss,out_loss, cylBC_loss, domain_loss):
-    e= int(epochs/5)
-    fig,ax = plt.subplots(3,1)
-    ax[0].plot(x1,error_cpu, label='V error')
-    #ax[0][0].set_yscale('log')
-    ax[0].set_ylim(0,0.5)
-    ax[0].set_yticks((0,0.05,0.08,0.1,0.2,0.3,0.5))
-    ax[0].set_xticks((0,e/8,e/4,e/2,e))
-    ax[0].set_xticklabels((0,epochs/8,epochs/4,epochs/2,epochs), fontsize=10)
-    ax[0].set_ylabel('L2 Error')
-    ax[0].set_xlabel('Iterations')
-    ax[0].xaxis.label.set_fontsize(25)
-    ax[0].yaxis.label.set_fontsize(20)
-    ax[0].grid()
-    ax[0].legend()
+    def error_loss_plot(self,epochs,x1,error_cpu,loss_cpu, bc_loss,in_loss,out_loss, cylBC_loss, domain_loss):
+        e= int(epochs/5)
+        fig,ax = plt.subplots(3,1)
+        ax[0].plot(x1,error_cpu, label='V error')
+        #ax[0][0].set_yscale('log')
+        ax[0].set_ylim(0,0.5)
+        ax[0].set_yticks((0,0.05,0.08,0.1,0.2,0.3,0.5))
+        ax[0].set_xticks((0,e/8,e/4,e/2,e))
+        ax[0].set_xticklabels((0,epochs/8,epochs/4,epochs/2,epochs), fontsize=10)
+        ax[0].set_ylabel('L2 Error')
+        ax[0].set_xlabel('Iterations')
+        ax[0].xaxis.label.set_fontsize(25)
+        ax[0].yaxis.label.set_fontsize(20)
+        ax[0].grid()
+        ax[0].legend()
 
-    ax[1].plot(x1,loss_cpu, label='V loss')
-    #ax[0][0].set_yscale('log')
-    ax[1].set_ylim(0, 0.3)
-    ax[1].set_yticks((0, 0.05, 0.08, 0.1,0.2,0.3))
-    ax[1].set_xticks((0,e/8,e/4,e/2,e))
-    ax[1].set_xticklabels((0,epochs/8,epochs/4,epochs/2,epochs), fontsize=10)
-    ax[1].set_ylabel('loss')
-    ax[1].set_xlabel('Iterations')
-    ax[1].xaxis.label.set_fontsize(25)
-    ax[1].yaxis.label.set_fontsize(20)
-    ax[1].grid()
-    ax[1].legend()
+        ax[1].plot(x1,loss_cpu, label='V loss')
+        #ax[0][0].set_yscale('log')
+        ax[1].set_ylim(0, 0.3)
+        ax[1].set_yticks((0, 0.05, 0.08, 0.1,0.2,0.3))
+        ax[1].set_xticks((0,e/8,e/4,e/2,e))
+        ax[1].set_xticklabels((0,epochs/8,epochs/4,epochs/2,epochs), fontsize=10)
+        ax[1].set_ylabel('loss')
+        ax[1].set_xlabel('Iterations')
+        ax[1].xaxis.label.set_fontsize(25)
+        ax[1].yaxis.label.set_fontsize(20)
+        ax[1].grid()
+        ax[1].legend()
 
-    ax[2].plot(bc_loss, label='BC loss')
-    ax[2].plot(in_loss, label='Inlet loss')
-    ax[2].plot(out_loss, label='Oulet loss')
-    ax[2].plot(cylBC_loss, label='Cylinder boundary loss')
-    ax[2].plot(domain_loss, label='Domain loss')
-    ax[2].set_ylim(0, 0.1)
-    ax[2].set_yticks((0, 0.05, 0.08, 0.1))
-    ax[2].grid()
-    ax[2].legend()
-
-
-    plt.show()
-
-def velocity_plot(V_pred_np,V_test):
-
-    fig,ax = plt.subplots(1,2)
-    V_test_np = V_test.cpu().detach().numpy()
-    ax[0].scatter(V_pred_np[:,0],V_pred_np[:,1], label = 'predicted_velocity_pinn')
-    ax[0].scatter(V_test_np[:,0], V_test_np[:,1], marker='x', label = 'exact_velocity_pinn')
-    ax[0].grid()
-    ax[0].legend()
-
-    #ax[1].scatter(V1_pred_np[:, 0], V1_pred_np[:, 1], label='predicted_velocity_dnn')
-    #ax[1].scatter(V_test_np[:, 0], V_test_np[:, 1], marker='x', label='exact_velocity_pinn')
-    #ax[1].grid()
-#
-    plt.show()
-
-def vector_plot(x,y,u_test,v_test,u_pred,v_pred):
-
-    fig,ax = plt.subplots(1,2)
-
-    ax[0].quiver(x,y,u_test, v_test, units='xy', label='Exact')
-    #ax[0][0].legend(loc='upper right')
-    ax[1].quiver(x,y,u_pred,v_pred, units='xy', color='red', label='PINN')
-    #ax[0][0].legend(loc='upper right')
-    #ax[1][1].quiver(x,y,u1_pred_grid,v1_pred_grid, units='xy', color='blue', label='DNN')
-    #handles, labels = ax.get_legend_handles_labels()
-    fig.legend(loc='upper right')
-    plt.show()
-
-def density_plot(x,y,u_test_grid,u_pred_grid,v_test_grid,v_pred_grid):
-
-    u_test_min = u_test_grid.min()
-    u_test_max = u_test_grid.max()
-
-    
-    v_test_max = v_test_grid.max()
-    v_test_min = v_test_grid.min()
-    
-
-    u_pred_min = u_pred_grid.min()
-    u_pred_max = u_pred_grid.max()
-    v_test_max = v_test_grid.max()
-    v_test_min = v_test_grid.min()
-    v_pred_max = v_pred_grid.max()
-    v_pred_min = v_pred_grid.max()
+        ax[2].plot(bc_loss, label='BC loss')
+        ax[2].plot(in_loss, label='Inlet loss')
+        ax[2].plot(out_loss, label='Oulet loss')
+        ax[2].plot(cylBC_loss, label='Cylinder boundary loss')
+        ax[2].plot(domain_loss, label='Domain loss')
+        ax[2].set_ylim(0, 0.1)
+        ax[2].set_yticks((0, 0.05, 0.08, 0.1))
+        ax[2].grid()
+        ax[2].legend()
 
 
-    fig, ax = plt.subplots(2, 2)
-    c1=ax[0][0].pcolormesh(x,y, u_test_grid, shading = 'gouraud', label='u_x_exact', vmin=u_test_min, vmax= u_test_max, cmap=plt.get_cmap('rainbow'))
-    fig.colorbar(c1, ax=ax[0][0])
-    ax[0][0].set_title('u_test', y=-0.1)
-    ax[0][0].axes.xaxis.set_visible(False)
-    ax[0][0].axes.yaxis.set_visible(False)
+        plt.show()
 
-    c2=ax[0][1].pcolormesh(x,y, u_pred_grid, shading = 'gouraud', label='u_x_pred', vmin=u_test_min, vmax= u_test_max, cmap=plt.get_cmap('rainbow'))
-    fig.colorbar(c2, ax=ax[0][1])
-    ax[0][1].set_title('u_pred', y=-0.1)
-    ax[0][1].axes.xaxis.set_visible(False)
-    ax[0][1].axes.yaxis.set_visible(False)
+    def velocity_plot(self,V_pred_np,V_test):
 
-    c3 = ax[1][0].pcolormesh(x, y, v_test_grid, shading='gouraud', label='v_x_exact', vmin=v_test_min, vmax=v_test_max,
-                             cmap=plt.get_cmap('rainbow'))
-    fig.colorbar(c3, ax=ax[1][0])
-    ax[1][0].set_title('v_test', y=-0.1)
-    ax[1][0].axes.xaxis.set_visible(False)
-    ax[1][0].axes.yaxis.set_visible(False)
+        fig,ax = plt.subplots(1,2)
+        V_test_np = V_test.cpu().detach().numpy()
+        ax[0].scatter(V_pred_np[:,0],V_pred_np[:,1], label = 'predicted_velocity_pinn')
+        ax[0].scatter(V_test_np[:,0], V_test_np[:,1], marker='x', label = 'exact_velocity_pinn')
+        ax[0].grid()
+        ax[0].legend()
 
-    c4 = ax[1][1].pcolormesh(x, y, v_pred_grid, shading='gouraud', label='v_x_pred', vmin=v_test_min, vmax=v_test_max,
-                             cmap=plt.get_cmap('rainbow'))
-    fig.colorbar(c4, ax=ax[1][1])
-    ax[1][1].set_title('v_pred', y=-0.1)
-    ax[1][1].axes.xaxis.set_visible(False)
-    ax[1][1].axes.yaxis.set_visible(False)
+        #ax[1].scatter(V1_pred_np[:, 0], V1_pred_np[:, 1], label='predicted_velocity_dnn')
+        #ax[1].scatter(V_test_np[:, 0], V_test_np[:, 1], marker='x', label='exact_velocity_pinn')
+        #ax[1].grid()
+    #
+        plt.show()
+
+    def vector_plot(self,x,y,u_test,v_test,u_pred,v_pred):
+
+        fig,ax = plt.subplots(1,2)
+
+        ax[0].quiver(x,y,u_test, v_test, units='xy', label='Exact')
+        #ax[0][0].legend(loc='upper right')
+        ax[1].quiver(x,y,u_pred,v_pred, units='xy', color='red', label='PINN')
+        #ax[0][0].legend(loc='upper right')
+        #ax[1][1].quiver(x,y,u1_pred_grid,v1_pred_grid, units='xy', color='blue', label='DNN')
+        #handles, labels = ax.get_legend_handles_labels()
+        fig.legend(loc='upper right')
+        plt.show()
+
+    def density_plot(self):
+
+        u_test_min = self.u_test_norm_grid.min()
+        u_test_max = self.u_test_norm_grid.max()
+
+        v_test_max = self.v_test_norm_grid.max()
+        v_test_min = self.v_test_norm_grid.min()
 
 
-    plt.show()
+
+        fig, ax = plt.subplots(2, 2)
+        c1=ax[0][0].pcolormesh(self.x,self.y, self.u_test_norm_grid, shading = 'gouraud', label='u_x_exact', vmin=u_test_min, vmax= u_test_max, cmap=plt.get_cmap('rainbow'))
+        fig.colorbar(c1, ax=ax[0][0])
+        ax[0][0].set_title('u_test', y=-0.1)
+        ax[0][0].axes.xaxis.set_visible(False)
+        ax[0][0].axes.yaxis.set_visible(False)
+
+        c2=ax[0][1].pcolormesh(self.x,self.y, self.u_pred_norm_grid, shading = 'gouraud', label='u_x_pred', vmin=u_test_min, vmax= u_test_max, cmap=plt.get_cmap('rainbow'))
+        fig.colorbar(c2, ax=ax[0][1])
+        ax[0][1].set_title('u_pred', y=-0.1)
+        ax[0][1].axes.xaxis.set_visible(False)
+        ax[0][1].axes.yaxis.set_visible(False)
+
+        c3 = ax[1][0].pcolormesh(self.x, self.y, self.v_test_norm_grid, shading='gouraud', label='v_x_exact', vmin=v_test_min, vmax=v_test_max,
+                                 cmap=plt.get_cmap('rainbow'))
+        fig.colorbar(c3, ax=ax[1][0])
+        ax[1][0].set_title('v_test', y=-0.1)
+        ax[1][0].axes.xaxis.set_visible(False)
+        ax[1][0].axes.yaxis.set_visible(False)
+
+        c4 = ax[1][1].pcolormesh(self.x, self.y, self.v_pred_norm_grid, shading='gouraud', label='v_x_pred', vmin=v_test_min, vmax=v_test_max,
+                                 cmap=plt.get_cmap('rainbow'))
+        fig.colorbar(c4, ax=ax[1][1])
+        ax[1][1].set_title('v_pred', y=-0.1)
+        ax[1][1].axes.xaxis.set_visible(False)
+        ax[1][1].axes.yaxis.set_visible(False)
+
+
+        plt.show()
+
+    def streamline(self):
+        fig, ax = plt.subplots(2, 1)
+        s1 = ax[0].streamplot(self.x, self.y, self.u_test_grid, self.v_test_grid, density=2, color=self.U_grid,
+                              cmap='rainbow')
+        fig.colorbar(s1.lines, ax=ax[0])
+        ax[0].plot(self.x_cyl[:, 0], self.x_cyl[:, 1], color='black')
+
+
+        s2 = ax[1].streamplot(self.x, self.y, self.u_pred_grid, self.v_pred_grid, density=2, color=self.U_grid, cmap='rainbow')
+        fig.colorbar(s2.lines, ax=ax[1])
+        ax[1].plot(self.x_cyl[:, 0], self.x_cyl[:, 1], color='black')
+
+
+        plt.show()
 
 ############################################################################################################################
 
@@ -654,12 +682,13 @@ class Plotting():
         self.result = data
 
         self.V_pred = self.result[0]
-        self.V_in = self.result[1]
+        self.V_domain = self.result[1]
                 
         V_pred_norm = self.result[2]
         V_in_norm = self.result[3]
         indices = self.result[4]
-        self.X_boundary_sort = self.result[-1]
+        self.X_boundary_sort = self.result[7]
+        self.V_in  = self.result[8]
         print(V_in_norm)
 
         h = 0.02
@@ -710,7 +739,7 @@ class Plotting():
                 v_test_in_norm[i]=0
                 v_pred_in_norm[i]=0
             else:
-                v_test_in[i]=self.V_in[c]
+                v_test_in[i]=self.V_domain[c]
                 v_pred_in[i]=self.V_pred[c]
                 v_test_in_norm[i]=V_in_norm[c]
                 v_pred_in_norm[i]=V_pred_norm[c]
@@ -744,6 +773,9 @@ class Plotting():
 
         self.u0_grid = torch.reshape(u0, self.x.shape).cpu().detach().numpy()
         self.v0_grid = torch.reshape(v0, self.y.shape).cpu().detach().numpy()
+
+        self.u_in_grid = torch.reshape(self.V_in[:,0], self.x.shape).cpu().detach().numpy()
+        self.v_in_grid = torch.reshape(self.V_in[:,1], self.y.shape).cpu().detach().numpy()
 
         
 
@@ -820,8 +852,6 @@ class Plotting():
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f'Using {device} device')
 
-
-
 file2 = open('result_rankine_oval_potential_flow.pkl', 'rb')
 data2 = pickle.load(file2)
 
@@ -834,28 +864,17 @@ plot.streamplot()
 ####################################################################################################
 
 
-device = 'cpu'
+'''device = 'cpu'
 #device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f'Using {device} device')  
 
 file0 = open('result_PINN_potential_flow.pkl', 'rb')
-file1 = open('result_potential_flow.pkl', 'rb')
+#file1 = open('result_potential_flow.pkl', 'rb')
 data0 = pickle.load(file0)
-data1 = pickle.load(file1)
+#data1 = pickle.load(file1)
 
 plot0 = Potential_flow(device,data0,True)
 
-plot1 = Potential_flow(device,data1,False)
+density = plot0.density_plot()
+stream = plot0.streamline()'''
 
-#vector_field = vector_plot(plot0.x2,plot0.y2,plot0.u_test,plot0.v_test,plot0.u_pred,plot0.v_pred)
-#velocity = velocity_plot(plot0.V_pred_np,plot0.V_test)
-#density = density_plot(plot0.x,plot0.y,plot0.u_test_grid, plot0.u_pred_grid,plot0.v_test_grid,plot0.v_pred_grid)
-
-#plot1 = Potential_flow(device,data1,False)
-
-#vector_field = vector_plot(plot0.x2,plot0.y2,plot0.u_test,plot0.v_test,plot0.u_pred,plot0.v_pred)
-#velocity = velocity_plot(plot0.V_pred_np,plot0.V_test)
-density = density_plot(plot0.x,plot0.y,plot0.u_test_grid, plot0.u_pred_grid,plot0.v_test_grid,plot0.v_pred_grid)
-
-#density2 = density_plot(plot1.x,plot1.y,plot1.u_test_grid, plot1.u_pred_grid,plot1.v_test_grid,plot1.v_pred_grid)
-#error_loss_plot = error_loss_plot(plot0.epochs,plot0.x1,plot0.error_cpu,plot0.loss_cpu,plot0.bc_loss,plot0.in_loss,plot0.out_loss,plot0.cylBc_loss ,plot0.domain_loss)

@@ -335,6 +335,18 @@ class Potential_flow_PINN(nn.Module):
 
     ################################################################Preprocessing#########################################################################################################
 
+def sort_points(xy: np.ndarray) -> np.ndarray:
+    # normalize data  [-1, 1]
+    xy_sort = np.empty_like(xy)
+    xy_sort[:, 0] = 2 * (xy[:, 0] - np.min(xy[:, 0])) / (np.max(xy[:, 0] - np.min(xy[:, 0]))) - 1
+    xy_sort[:, 1] = 2 * (xy[:, 1] - np.min(xy[:, 1])) / (np.max(xy[:, 1] - np.min(xy[:, 1]))) - 1
+
+    # get sort result
+    sort_array = np.arctan2(xy_sort[:, 0], xy_sort[:, 1])
+    sort_result = np.argsort(sort_array)
+
+    # apply sort result
+    return xy[sort_result]
 
 def preprocessing():
     ##Grid creation
@@ -404,6 +416,8 @@ epochs = 1
 
 X_initial, X_bc, X_outlet, X_domain,_, X_cyl_bc, indices = preprocessing()
 
+X_cyl = sort_points(X_cyl_bc)
+
 X_train_test = np.concatenate((X_initial, X_bc, X_outlet, X_cyl_bc))
 
 
@@ -449,7 +463,7 @@ V_pred = model.denormalize_velocity(V_pred_norm)
 print(error_vec)
 
 result = [V_pred_norm, V_domain_norm, model.error, model.trainingloss, indices, model.bc_loss, model.inlet_loss,
-          model.outlet_loss, model.cyl_bc_loss, model.domain_loss, V_pred, V_domain, X_cyl_bc]
+          model.outlet_loss, model.cyl_bc_loss, model.domain_loss, V_pred, V_domain, X_cyl]
 f = open('result_PINN_potential_flow.pkl', 'wb')
 pickle.dump(result, f)
 f.close()

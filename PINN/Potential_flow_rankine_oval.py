@@ -666,7 +666,7 @@ layers = np.array([2, 60, 60, 60,60,60, 2])
 
 nu = 0.8
 
-epochs = 3000
+epochs = 1
 
 h5 = h5py.File('data_rankine_oval_potential_flow.h5','r')
 
@@ -728,7 +728,9 @@ print('Training time: %.2f' % (elapsed))
 
 V_domain_norm = model.normalize_velocity(V_domain)
 X_domain =  torch.from_numpy(X_domain).float().to(device)
-
+X_in = torch.from_numpy(X_in).float().to(device)
+preprocessing = Potential_flow_preprocessing(U0,m,h,device,a)
+V_in = preprocessing.velocity_cartesian_vjp(X_in)
 
 error, V_pred_norm = model.test(model,X_domain, V_domain_norm)
 print(error)
