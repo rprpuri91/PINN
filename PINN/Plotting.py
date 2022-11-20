@@ -445,6 +445,8 @@ class Potential_flow():
         self.V_domain = data[11]
         self.x_cyl = data[12]
 
+        self.V_domain = torch.div(self.V_domain,10.0)
+
         self.bc_loss = torch.tensor(self.bc_loss).float().to(device)
         self.in_loss = torch.tensor(self.in_loss).float().to(device)
         self.out_loss = torch.tensor(self.out_loss).float().to(device)
@@ -661,8 +663,13 @@ class Potential_flow():
         fig, ax = plt.subplots(2, 1)
         s1 = ax[0].streamplot(self.x, self.y, self.u_test_grid, self.v_test_grid, density=2, color=self.U_grid,
                               cmap='rainbow')
-        fig.colorbar(s1.lines, ax=ax[0])
+        c1 = fig.colorbar(s1.lines, ax=ax[0])
+        c1.set_label('$u_{mag}$/U', rotation=0, labelpad=20)
         ax[0].plot(self.x_cyl[:, 0], self.x_cyl[:, 1], color='black')
+        #ax[0].plot([-2.0,2.0], [0.0,0.0])
+        ax[0].annotate('<-------- D -------->', xy=(-2.0, -0.1), xycoords='data', fontsize=10)
+        ax[0].axes.xaxis.set_visible(False)
+        ax[0].axes.yaxis.set_visible(False)
 
 
         s2 = ax[1].streamplot(self.x, self.y, self.u_pred_grid, self.v_pred_grid, density=2, color=self.U_grid, cmap='rainbow')
@@ -689,7 +696,10 @@ class Plotting():
         indices = self.result[4]
         self.X_boundary_sort = self.result[7]
         self.V_in  = self.result[8]
-        print(V_in_norm)
+        print(self.V_in)
+
+        self.V_domain = torch.div(self.V_domain, 10.0)
+        #print(self.V_in1)
 
         h = 0.02
         x_min = -8.0
@@ -774,8 +784,15 @@ class Plotting():
         self.u0_grid = torch.reshape(u0, self.x.shape).cpu().detach().numpy()
         self.v0_grid = torch.reshape(v0, self.y.shape).cpu().detach().numpy()
 
-        self.u_in_grid = torch.reshape(self.V_in[:,0], self.x.shape).cpu().detach().numpy()
-        self.v_in_grid = torch.reshape(self.V_in[:,1], self.y.shape).cpu().detach().numpy()
+        '''u_in = self.V_in1[:,0]
+        v_in = self.V_in1[:,1]
+
+        U_in = np.sqrt(np.square(u_in.cpu().detach().numpy()) + np.square(v_in.cpu().detach().numpy()))
+        # print('U',U)
+        self.U_in_grid = np.reshape(U_in, self.x.shape)
+
+        self.u_in_grid = torch.reshape(u_in, self.x.shape).cpu().detach().numpy()
+        self.v_in_grid = torch.reshape(v_in, self.y.shape).cpu().detach().numpy()'''
 
         
 
@@ -838,9 +855,15 @@ class Plotting():
 
         fig, ax = plt.subplots(2,1)
         s1 = ax[0].streamplot(self.x1,self.y1,self.u0_grid, self.v0_grid, density=2,color = self.U_grid, cmap='rainbow')
-        fig.colorbar(s1.lines, ax =ax[0])
+        c1 = fig.colorbar(s1.lines, ax =ax[0])
+        c1.set_label('$u_{mag}$/U', rotation=0, labelpad=20)
         ax[0].plot(self.X_boundary_sort[:,0], self.X_boundary_sort[:,1], color='black')
         ax[0].hlines(y=0,xmin=-8.0,xmax=8.0, color='black')
+        ax[0].plot(2,0, color = 'red', marker = 'o')
+        ax[0].plot(-2,0, color = 'red', marker = 'o')
+        ax[0].annotate('<-------- 2a -------->', xy=(-2.0, 0.1), xycoords='data', fontsize=9.7)
+        ax[0].axes.xaxis.set_visible(False)
+        ax[0].axes.yaxis.set_visible(False)
 
         s2 = ax[1].streamplot(self.x1,self.y1,self.u_grid, self.v_grid, density=2, color = self.U_grid, cmap='rainbow')
         fig.colorbar(s2.lines, ax=ax[1])
@@ -852,19 +875,19 @@ class Plotting():
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f'Using {device} device')
 
-file2 = open('result_rankine_oval_potential_flow.pkl', 'rb')
+'''file2 = open('result_rankine_oval_potential_flow.pkl', 'rb')
 data2 = pickle.load(file2)
 
 plot = Plotting(data2)
 
 #plot.density_plot_norm()
 plot.streamplot()
-#plot.density_plot()
+#plot.density_plot()'''
 
 ####################################################################################################
 
 
-'''device = 'cpu'
+device = 'cpu'
 #device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f'Using {device} device')  
 
@@ -875,6 +898,6 @@ data0 = pickle.load(file0)
 
 plot0 = Potential_flow(device,data0,True)
 
-density = plot0.density_plot()
-stream = plot0.streamline()'''
+#density = plot0.density_plot()
+stream = plot0.streamline()
 

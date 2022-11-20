@@ -226,11 +226,6 @@ class Rankine_oval_PINN(nn.Module):
         if torch.is_tensor(X) != True:
             x = torch.from_numpy(X)
         X = X.to(self.device)
-        # u_b = torch.from_numpy(self.ub).float().to(self.device)
-        # l_b = torch.from_numpy(self.lb).float().to(self.device)
-
-        # preprocessing input
-        # x = (x - l_b)/(u_b - l_b) #feature scaling
 
         x = self.scaling(X)
         # convert to float
@@ -659,7 +654,7 @@ def data_generation():
 
     h5.close()
 
-#data_generation()
+data_generation()
 
 ######################################################################################################################
 layers = np.array([2, 60, 60, 60,60,60, 2])
@@ -730,14 +725,14 @@ V_domain_norm = model.normalize_velocity(V_domain)
 X_domain =  torch.from_numpy(X_domain).float().to(device)
 X_in = torch.from_numpy(X_in).float().to(device)
 preprocessing = Potential_flow_preprocessing(U0,m,h,device,a)
-
+V_in = preprocessing.velocity_cartesian_vjp(X_in)
 
 error, V_pred_norm = model.test(model,X_domain, V_domain_norm)
 print(error)
 
 V_pred = model.denormalize_velocity(V_pred_norm)
 
-result = [V_pred,V_domain, V_pred_norm, V_domain_norm,indices_domain, model.error, model.training_loss,X_boundary_sort]
+result = [V_pred,V_domain, V_pred_norm, V_domain_norm,indices_domain, model.error, model.training_loss,X_boundary_sort, V_in]
 f = open('result_rankine_oval_potential_flow.pkl', 'wb')
 pickle.dump(result, f)
 f.close()
