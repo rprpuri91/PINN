@@ -10,7 +10,7 @@ import h5py
 import os
 import matplotlib.pyplot as plt
 import scipy as sc
-#from sympy import *
+from sympy import *
 
 #from torch_geometric.data import data
 
@@ -450,7 +450,7 @@ b = a/6.0
 
 X_in = np.hstack([x.flatten()[:, None], y.flatten()[:, None]])
 
-X_initial = np.hstack((x[:,0][:, None], y[:,0][:, None]))
+X_initial = np.hstack((x[ :,0][:, None], y[:,0][:, None]))
 
 X_bc_lower = np.hstack((x[0,:][:, None], y[0,:][:, None]))
 
@@ -460,6 +460,7 @@ X_wall = np.vstack([X_bc_upper, X_bc_lower])
 
 X_outlet = np.hstack((x[:,-1][:, None], y[:,0][:, None]))
 
+print('1')
 
 def mesh_rankine_oval(m):
 
