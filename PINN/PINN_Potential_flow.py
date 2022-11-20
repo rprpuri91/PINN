@@ -360,15 +360,15 @@ def preprocessing():
 
     X_in = np.hstack([x.flatten()[:, None], y.flatten()[:, None]])
 
-    X_initial = np.hstack((x[0, :][:, None], y[0, :][:, None]))
+    X_initial = np.hstack((x[:,0][:, None], y[:,0][:, None]))
 
-    X_bc_lower = np.hstack((x[:, 0][:, None], y[:, 0][:, None]))
+    X_bc_lower = np.hstack((x[0,:][:, None], y[0,:][:, None]))
 
-    X_bc_upper = np.hstack((x[:, 0][:, None], y[:, -1][:, None]))
+    X_bc_upper = np.hstack((x[0,:][:, None], y[-1,:][:, None]))
 
     X_bc = np.vstack([X_bc_upper, X_bc_lower])
 
-    X_outlet = np.hstack((x[-1, :][:, None], y[0, :][:, None]))
+    X_outlet = np.hstack((x[:,-1][:, None], y[:,0][:, None]))
 
     indices_R = []
     indices_inR = []
@@ -412,7 +412,7 @@ layers = np.array([2, 60, 60, 60,60,60, 2])
 
 nu = 0.8
 
-epochs = 1
+epochs = 5000
 
 X_initial, X_bc, X_outlet, X_domain,_, X_cyl_bc, indices = preprocessing()
 
