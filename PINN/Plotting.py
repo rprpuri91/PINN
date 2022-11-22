@@ -898,6 +898,6 @@ data0 = pickle.load(file0)
 
 plot0 = Potential_flow(device,data0,True)
 
-#density = plot0.density_plot()
+density = plot0.density_plot()
 stream = plot0.streamline()
 

@@ -12,27 +12,23 @@ import scipy as sc
 from sympy import *
 
 class Preprocessing_poiseuille():
-    def __init__(self, R, L, Q, mu):
+    def __init__(self, h, Gc, U, mu):
 
-        self.R = R
-        self.L = L
-        self.Q = Q
+        self.h = h
+        self.G_c = Gc
+        self.U = U
         self.mu = mu
 
-
-
-
     def pressure_drop(self):
-        delta_p = (8*self.mu*self.L*self.Q)/(np.pi*(self.R**4))
-        return delta_p
+        pass
 
     def velocity(self,X):
-        #
-        r = X[:,1]
-        G = self.pressure_drop()/self.L
+        #u = U(y/h) - (1/2mu)Gc(y^2 - hy)
+        y = X[:,1]
+
         u = []
-        for i in range(len(r)):
-            u_i = G*(self.R**2 - r[i]**2)/(4*self.mu)
+        for i in range(len(y)):
+            u_i = self.U*(y[i]/self.h) - (1/2*self.mu)*self.G_c*(y[i]**2 - self.h*y[i])
             u.append(u_i)
 
         vel = np.array(u)
@@ -48,7 +44,7 @@ class PINN_Poisuelle(nn.Module):
         self.layers = layers
         self.nu = nu
         self.x = x
-        self.r = r
+
         self.v = v
         self.device = device
 
@@ -224,25 +220,24 @@ class PINN_Poisuelle(nn.Module):
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f'Using {device} device')
 
-R = 6.0
-L = 16.0
-Q = 100.0
+h = 6.0
+Gc = 5
+U = 10.0
 mu = 1.0016e-3  # 20°C water
+L = 100
 
-U = Q/(np.pi*(R^2))
-
-preprocessing = Preprocessing_poiseuille(R,L,Q,mu)
+preprocessing = Preprocessing_poiseuille(h, Gc, U, mu)
 
 x_values = np.arange(0.0, L, 0.05).tolist()
-r_values = np.arange(-R, R, 0.05).tolist()
+y_values = np.arange(-h, h, 0.05).tolist()
 x_values.append(L)
-r_values.append(R)
+y_values.append(h)
 
-x,r = np.meshgrid(x_values,r_values)
+x,y = np.meshgrid(x_values,y_values)
 
-X_in = np.hstack([x.flatten()[:, None], r.flatten()[:, None]])
+X_in = np.hstack([x.flatten()[:, None], y.flatten()[:, None]])
 
-X_initial = np.hstack((x[ :,0][:, None], r[ :,0][:, None]))
+X_initial = np.hstack((x[ :,0][:, None], y[ :,0][:, None]))
 
 vel_initial = preprocessing.velocity(X_initial)
 
@@ -250,7 +245,7 @@ layers = np.array([2, 60, 60, 60,60,60, 1])
 
 nu = 0.8
 
-epochs = 1000
+epochs = 1
 
 model = PINN_Poisuelle(layers,nu,X_initial,vel_initial, device)
 
@@ -276,10 +271,10 @@ v_avg = torch.div(vel_initial,U)
 v_avg_pred = torch.div(v_pred,U)
 
 fig, ax = plt.subplots(1,2)
-ax[0].plot(v_avg.cpu().detach().numpy(),r, label='U_exact')
-ax[0].set_ylim(-U,2*U)
-ax[1].plot(v_avg_pred.cpu().detach().numpy(),r, label='U_pred')
-ax[1].set_ylim(-U,2*U)
+ax[0].plot(vel_initial.cpu().detach().numpy(),y, label='U_exact')
+ax[0].set_xlim(-U,2*U)
+ax[1].plot(v_pred.cpu().detach().numpy(),y, label='U_pred')
+ax[1].set_xlim(-U,2*U)
 plt.show()
 
 

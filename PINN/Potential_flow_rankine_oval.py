@@ -597,11 +597,11 @@ def mesh_rankine_oval(m):
 
     X_domain = np.delete(X_in, indices_inside_oval, axis=0)
 
-    fig, ax = plt.subplots(1,2)
+    '''fig, ax = plt.subplots(1,2)
     ax[0].scatter(X_domain[:,0],X_domain[:,1])
     ax[1].scatter(X_domain_in_np[:,0],X_domain_in_np[:,1])\
     #ax[1].scatter(X_domain[:,0],X_domain[:,1])
-    plt.show()
+    plt.show()'''
 
     return  X_domain, indices_inside_oval, X_boundary
 
@@ -654,10 +654,10 @@ def data_generation():
 
     h5.close()
 
-data_generation()
+#data_generation()
 
 ######################################################################################################################
-'''layers = np.array([2, 60, 60, 60,60,60, 2])
+layers = np.array([2, 60, 60, 60,60,60, 2])
 
 nu = 0.8
 
@@ -735,7 +735,7 @@ V_pred = model.denormalize_velocity(V_pred_norm)
 result = [V_pred,V_domain, V_pred_norm, V_domain_norm,indices_domain, model.error, model.training_loss,X_boundary_sort, V_in]
 f = open('result_rankine_oval_potential_flow.pkl', 'wb')
 pickle.dump(result, f)
-f.close()'''
+f.close()
 
 
 
