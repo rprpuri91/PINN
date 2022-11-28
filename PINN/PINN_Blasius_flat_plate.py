@@ -20,6 +20,9 @@ class Blasius_Preprocessing():
         self.rho0 = rho0
         self.mu = mu
         self.X = X
+        self.f0 = 0
+        self.g0 = 0
+        self.h0 = np.array([0.1,0.2,0.3])
 
     def reynolds_fn_x(self,x):
         Rex = self.rho0*self.U0*x/self.mu
@@ -52,6 +55,11 @@ class Blasius_Preprocessing():
         #h' = f''' = -1/2(fh)
         #f(0) = f'(0) = g(0)
         '''implent Runge-kutta K4 solution'''
+    def rungekutta(self):
+        eta = self.independent_eta()
+        N = len(eta)
+
+
 
     def blasius_eq(self):
         eta = self.independent_eta()
@@ -80,12 +88,12 @@ class Blasius_Preprocessing():
 
 
 s = 0.05
-L = 50
+L = 10
 x_values = np.arange(0,L,s).tolist()
-y_values = np.arange(0,8,s).tolist()
+y_values = np.arange(0,3,s).tolist()
 x_values.append(L)
-y_values.append(8)
-U0 = 100
+y_values.append(3)
+U0 = 10
 rho0 = 1
 mu = 1.81e-5
 
