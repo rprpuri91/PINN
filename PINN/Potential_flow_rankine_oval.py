@@ -641,7 +641,7 @@ def main(X_in):
 
 
 
-    epochs = 1
+    epochs = 100
 
     h5 = h5py.File('data_rankine_oval_potential_flow.h5','r')
 
