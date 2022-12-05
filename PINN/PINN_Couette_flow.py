@@ -196,7 +196,7 @@ class PINN_Poisuelle(nn.Module):
         #print('continuity',loss_continuity)
         loss_velocity = self.loss_function(U,V_train)
         print('velocity',loss_velocity)
-        loss =  loss_velocity
+        loss =  loss_velocity #+ loss_continuity
 
         return loss
 
@@ -298,7 +298,7 @@ def main():
     v_avg_pred = torch.div(v_pred,U)
 
     result = [v_avg, v_avg_pred, model.training_loss, model.error]
-    f = open('result_couette_flow.pkl', 'wb')
+    f = open('result_NN_couette_flow.pkl', 'wb')
     pickle.dump(result, f)
     f.close()
 
@@ -309,6 +309,8 @@ def plotting():
 
     v_avg = data0[0]
     v_avg_pred = data0[1]
+    error = data0[3]
+    plt.plot(error)
     fig, ax = plt.subplots(1,2)
     ax[0].stem(X_initial1[:,1], v_avg.cpu().detach().numpy(), orientation='horizontal',markerfmt= '>', label='U_exact')
     ax[0].plot(v_avg.cpu().detach().numpy(),y1)

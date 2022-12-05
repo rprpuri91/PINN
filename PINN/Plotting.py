@@ -476,6 +476,7 @@ class Potential_flow():
         print(self.V_test.size())
 
         self.error_cpu = torch.tensor(self.error,device=self.device)
+        print('error',self.error_cpu[-1])
         self.loss_cpu = torch.tensor(self.loss, device=self.device)
         self.error2_cpu = torch.tensor(self.error2, device = self.device)
         self.loss2_cpu = torch.tensor(self.loss2, device = self.device)
@@ -633,35 +634,35 @@ class Potential_flow():
         fig, ax = plt.subplots(2, 2, gridspec_kw={'width_ratios': [2.5, 3]})
         c1=ax[0][0].pcolormesh(self.x,self.y, self.u_test_norm_grid, shading = 'gouraud', label='u_x_exact', vmin=u_test_min, vmax= u_test_max, cmap=plt.get_cmap('YlGnBu'))
         #fig.colorbar(c1, ax=ax[0][0])
-        ax[0][0].set_title('$u_{exact}$', y=-0.2)
+        ax[0][0].set_title('$U_{exact}$', y=-0.2)
         ax[0][0].add_patch(plt.Circle((0, 0), 2, color='Black', fill=False))
-        ax[0][0].title.set_fontsize(25)
+        ax[0][0].title.set_fontsize(15)
         ax[0][0].axes.xaxis.set_visible(False)
         ax[0][0].axes.yaxis.set_visible(False)
 
-        c2=ax[0][1].pcolormesh(self.x,self.y, self.u_pred_norm_grid, shading = 'gouraud', label='u_x_pred', vmin=u_test_min, vmax= u_test_max, cmap=plt.get_cmap('YlGnBu'))
+        c2=ax[0][1].pcolormesh(self.x,self.y, self.v_test_norm_grid, shading = 'gouraud', label='v_x_test', vmin=v_test_min, vmax= v_test_max, cmap=plt.get_cmap('YlGnBu'))
         fig.colorbar(c2, ax=ax[0][1])
-        ax[0][1].set_title('$u_{pred}$', y=-0.2)
+        ax[0][1].set_title('$V_{exact}$', y=-0.2)
         ax[0][1].add_patch(plt.Circle((0, 0), 2, color='Black', fill=False))
-        ax[0][1].title.set_fontsize(20)
+        ax[0][1].title.set_fontsize(15)
         ax[0][1].axes.xaxis.set_visible(False)
         ax[0][1].axes.yaxis.set_visible(False)
 
-        c3 = ax[1][0].pcolormesh(self.x, self.y, self.v_test_norm_grid, shading='gouraud', label='v_x_exact', vmin=v_test_min, vmax=v_test_max,
+        c3 = ax[1][0].pcolormesh(self.x, self.y, self.u_pred_norm_grid, shading='gouraud', label='u_x_pred', vmin=u_test_min, vmax=u_test_max,
                                  cmap=plt.get_cmap('YlGnBu'))
         #fig.colorbar(c3, ax=ax[1][0])
-        ax[1][0].set_title('$v_{exact}$', y=-0.2)
+        ax[1][0].set_title('$U_{pred}$', y=-0.2)
         ax[1][0].add_patch(plt.Circle((0,0),2, color='Black', fill=False))
-        ax[1][0].title.set_fontsize(20)
+        ax[1][0].title.set_fontsize(15)
         ax[1][0].axes.xaxis.set_visible(False)
         ax[1][0].axes.yaxis.set_visible(False)
 
         c4 = ax[1][1].pcolormesh(self.x, self.y, self.v_pred_norm_grid, shading='gouraud', label='v_x_pred', vmin=v_test_min, vmax=v_test_max,
                                  cmap=plt.get_cmap('YlGnBu'))
         fig.colorbar(c4, ax=ax[1][1])
-        ax[1][1].set_title('$v_{pred}$', y=-0.2)
+        ax[1][1].set_title('$V_{pred}$', y=-0.2)
         ax[1][1].add_patch(plt.Circle((0, 0), 2, color='Black', fill=False))
-        ax[1][1].title.set_fontsize(20)
+        ax[1][1].title.set_fontsize(15)
         ax[1][1].axes.xaxis.set_visible(False)
         ax[1][1].axes.yaxis.set_visible(False)
 
@@ -805,13 +806,13 @@ class Plotting():
 
         
 
-        fig, ax = plt.subplots(1,3)
+        '''fig, ax = plt.subplots(1,3)
 
         ax[0].plot(u0)
         ax[1].plot(v0)
         ax[2].plot(U)
 
-        plt.show()
+        plt.show()'''
         
 
     def density_plot_norm(self):
@@ -828,29 +829,29 @@ class Plotting():
 
         ax[0][0].plot(self.X_boundary_sort[:, 0], self.X_boundary_sort[:, 1], color='black')
         ax[0][0].hlines(y=0, xmin=-8.0, xmax=8.0, color='black')
-        ax[0][0].set_title('$U_{test}$', y=-0.2)
-        ax[0][0].title.set_fontsize(20)
+        ax[0][0].set_title('$U_{exact}$', y=-0.2)
+        ax[0][0].title.set_fontsize(15)
         ax[0][0].axes.xaxis.set_visible(False)
         ax[0][0].axes.yaxis.set_visible(False)
 
 
-        c2=ax[1][0].pcolormesh(self.x,self.y, self.v0_grid_norm, shading = 'gouraud', label='v_x_exact', vmin=v_grid_min, vmax= v_grid_max, cmap=plt.get_cmap('YlGnBu'))
+        c2=ax[1][0].pcolormesh(self.x,self.y, self.u_grid_norm, shading = 'gouraud', label='u_x_pred', vmin=u_grid_min, vmax= u_grid_max, cmap=plt.get_cmap('YlGnBu'))
         #fig.colorbar(c2, ax=ax[1][0])
 
         ax[1][0].plot(self.X_boundary_sort[:, 0], self.X_boundary_sort[:, 1], color='black')
         ax[1][0].hlines(y=0, xmin=-8.0, xmax=8.0, color='black')
-        ax[1][0].set_title('$V_{test}$', y=-0.2)
-        ax[1][0].title.set_fontsize(20)
+        ax[1][0].set_title('$U_{pred}$', y=-0.2)
+        ax[1][0].title.set_fontsize(15)
         ax[1][0].axes.xaxis.set_visible(False)
         ax[1][0].axes.yaxis.set_visible(False)
 
-        c3=ax[0][1].pcolormesh(self.x,self.y, self.u_grid_norm, shading = 'gouraud', label='u_x_pred', vmin=u_grid_min, vmax= u_grid_max, cmap=plt.get_cmap('YlGnBu'))
+        c3=ax[0][1].pcolormesh(self.x,self.y, self.v0_grid_norm, shading = 'gouraud', label='v_x_exact', vmin=v_grid_min, vmax= v_grid_max, cmap=plt.get_cmap('YlGnBu'))
         fig.colorbar(c3, ax=ax[0][1])
 
         ax[0][1].plot(self.X_boundary_sort[:, 0], self.X_boundary_sort[:, 1], color='black')
         ax[0][1].hlines(y=0, xmin=-8.0, xmax=8.0, color='black')
-        ax[0][1].set_title('$U_{pred}$', y=-0.2)
-        ax[0][1].title.set_fontsize(20)
+        ax[0][1].set_title('$V_{exact}$', y=-0.2)
+        ax[0][1].title.set_fontsize(15)
         ax[0][1].axes.xaxis.set_visible(False)
         ax[0][1].axes.yaxis.set_visible(False)
 
@@ -861,7 +862,7 @@ class Plotting():
         ax[1][1].plot(self.X_boundary_sort[:, 0], self.X_boundary_sort[:, 1], color='black')
         ax[1][1].hlines(y=0, xmin=-8.0, xmax=8.0, color='black')
         ax[1][1].set_title('$V_{pred}$', y=-0.2)
-        ax[1][1].title.set_fontsize(20)
+        ax[1][1].title.set_fontsize(15)
         ax[1][1].axes.xaxis.set_visible(False)
         ax[1][1].axes.yaxis.set_visible(False)
 
@@ -900,10 +901,10 @@ class Plotting():
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f'Using {device} device')
 
-file2 = open('result_NN_rankine_oval_potential_flow.pkl', 'rb')
+file2 = open('result_rankine_oval_potential_flow.pkl', 'rb')
 data2 = pickle.load(file2)
 
-plot = Plotting(data2)
+#plot = Plotting(data2)
 
 #plot.density_plot_norm()
 #plot.streamplot()
@@ -918,7 +919,7 @@ data1 = pickle.load(file1)
 
 plot0 = Potential_flow(device,data0,data1,data2)
 
-error_plot = plot0.error_loss_plot()
-#density = plot0.density_plot()
+#error_plot = plot0.error_loss_plot()
+density = plot0.density_plot()
 #stream = plot0.streamline()
 

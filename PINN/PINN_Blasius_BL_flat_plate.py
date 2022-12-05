@@ -175,51 +175,49 @@ class PINN_blasius(nn.Module):
 
         f_train = self.normalize_velocity(f_train)
         f_test = self.normalize_velocity(f_test)
-        f_train = torch.reshape(f_train, (f_train.shape[0], 1))
-        f_test = torch.reshape(f_test, (f_test.shape[0], 1))
+        #f_train = torch.reshape(f_train, (f_train.shape[0], 1))
+        #f_test = torch.reshape(f_test, (f_test.shape[0], 1))
 
         return f_train, eta_train, f_test, eta_test
 
-    def continuity_equation(self, X):
-        # u_x'' = -G_c/mu
+    def continuity_equation(self, eta):
+        # f''' + 1/2*f*f'' = 0
 
-        if torch.is_tensor(X) != True:
-            X = torch.from_numpy(X).to(self.device)
+        if torch.is_tensor(eta) != True:
+            eta = torch.from_numpy(eta).to(self.device)
 
-        g = torch.clone(X)
+        g = torch.clone(eta)
         g.requires_grad = True
-        u = self.forward(g)
+        f = self.forward(g)
 
         '''X = torch.split(X, 1, dim=1)
         x = X[0]
         y = X[1]'''
 
-        u_x_y = torch.autograd.grad(u, g, torch.ones([X.shape[0], 1]).to(self.device), retain_graph=True,
+        df_deta = torch.autograd.grad(f, g, torch.ones(eta.shape[0],2).to(self.device), retain_graph=True,
                                     create_graph=True)[0]
 
-        u_xx_yy = torch.autograd.grad(u_x_y, g, torch.ones(X.shape).to(self.device), create_graph=True)[0]
-        u_yy = u_xx_yy[:, 1]
-        # H = torch.autograd.functional.hessian(self.velocity_pred, (x,y), create_graph=True)
-        # u_yy = torch.diagonal(H[1][1], 0)
+        d2f_deta2 = torch.autograd.grad(df_deta, g, torch.ones(eta.shape[0],2).to(self.device), create_graph=True)[0]
 
-        G = torch.full((u_yy.shape), self.Gc)
-        res = u_yy - G / (self.mu * self.U)
+        d3f_deta3 = torch.autograd.grad(d2f_deta2,g,torch.ones(eta.shape[0],2).to(self.device))
+
+        res = d3f_deta3  + f*d2f_deta2/2
         return res
 
     def loss(self):
 
         f_train, eta_train, f_test, eta_test = self.train_test_data(self.eta, self.f)
 
-        # res = self.continuity_equation(X_train)
+        #res = self.continuity_equation(eta_train)
 
         f = self.forward(eta_train)
 
-        # target = torch.zeros_like(res, device=self.device)
+        #target = torch.zeros_like(res, device=self.device)
 
-        # loss_continuity = self.loss_function(res, target)
-        # print('continuity', loss_continuity)
+        #loss_continuity = self.loss_function(res, target)
+        #print('continuity', loss_continuity)
         loss_velocity = self.loss_function(f, f_train)
-        # print('velocity',loss_velocity)
+        print('velocity',loss_velocity)
         loss = loss_velocity
 
         return loss
@@ -294,12 +292,18 @@ eta, f, g, h = preprocessing.data_from_matlab()
 
 def main():
     eta, f, g, h = preprocessing.data_from_matlab()
-    vel = preprocessing.exact_velocity()
-    layers = np.array([1, 60, 60, 60, 60, 60, 1])
+    f = torch.reshape(f, (f.shape[0],1))
+    g = torch.reshape(g, (g.shape[0],1))
+    F = torch.cat((f,g), dim=1)
+    print(f.shape)
+    print(g.shape)
+    print(F)
+    #vel = preprocessing.exact_velocity()
+    layers = np.array([1, 60, 60, 60, 60, 60, 2])
 
-    epochs = 100
+    epochs = 1000
 
-    model = PINN_blasius(layers, nu, eta, f, device)
+    model = PINN_blasius(layers, nu, eta, F, device)
 
     model.to(device)
 
@@ -315,28 +319,51 @@ def main():
 
     print('Training time: %.2f' % (elapsed))
 
-    f_norm = model.normalize_velocity(f)
-    error, f_pred = model.test(model, eta, f_norm)
+    F_norm = model.normalize_velocity(F)
+    error, F_pred = model.test(model, eta, F_norm)
 
-    result = [f_norm, f_pred, model.training_loss, model.error]
-    f = open('result_blasius_flow.pkl', 'wb')
+    result = [F_norm, F_pred, model.training_loss, model.error, error]
+    f = open('result_NN_blasius_flow.pkl', 'wb')
     pickle.dump(result, f)
     f.close()
 
 
 def plotting():
-    file0 = open('result_blasius_flow.pkl', 'rb')
+    file0 = open('result_NN_blasius_flow.pkl', 'rb')
     data0 = pickle.load(file0)
 
-    f_norm = data0[0]
-    f_pred = data0[1]
-    fig, ax = plt.subplots(1, 1)
-    ax.plot(f_norm.cpu().detach().numpy(), eta, label='U_exact')
-    ax.set_xlabel('f', rotation=0)
-    ax.axes.yaxis.set_visible(False)
-    ax.set_xlim(-1, 2)
-    ax.plot(f_pred.cpu().detach().numpy(), eta, label='U_pred', marker='x')
-    # ax[1].hlines(y=-R, xmin=-1, xmax=5, color='black')
+    N_u = int(0.5 * len(eta))
+
+    idx = np.random.choice(eta.shape[0], N_u, replace=False)
+
+    F_norm = data0[0]
+    f_norm = F_norm[:,0]
+    g_norm = F_norm[:,1]
+    F_pred = data0[1]
+    f_pred = F_pred[:,0]
+    g_pred = F_pred[:,1]
+    error = data0[4]
+    print('error',error)
+    eta1 = eta[idx,]
+    u0 = g_norm[idx,]
+    u_pred = g_pred[idx,]
+
+    v0 = (0.5*(torch.mul(eta,g_norm)-f_norm))[idx,]
+    v_pred = (0.5*(torch.mul(eta,g_pred)-f_pred))[idx,]
+
+    print(f_pred)
+    fig, ax = plt.subplots(1, 2)
+    ax[0].plot(u0.cpu().detach().numpy(),eta1, label='u_exact')
+    ax[0].scatter(u_pred.cpu().detach().numpy(),eta1, label='u_pred', marker='x', color='Orange')
+    ax[0].set_xlabel('$u/U_0$', rotation=0)
+    ax[0].set_ylabel('$\eta$', rotation=0)
+    #ax.axes.yaxis.set_visible(False)
+    #ax.set_xlim(-1, 2)
+    ax[1].plot(v0.cpu().detach().numpy(),eta1, label='v_pred')
+    ax[1].scatter(v_pred.cpu().detach().numpy(), eta1, label='u_pred', marker='x', color='Orange')
+    ax[1].set_xlabel(r'v$\sqrt{\frac{x}{\nu U_0}}$', rotation=0)
+    ax[1].set_ylabel('$\eta$', rotation=0)
+    #ax[1].hlines(y=-R, xmin=-1, xmax=5, color='black')
     # ax[1].hlines(y=R, xmin=-1, xmax=5, color='black')
     # ax[1].set_xlabel('$u_x$/U', rotation=0)
     # ax[1].axes.yaxis.set_visible(False)
@@ -344,4 +371,5 @@ def plotting():
     plt.show()
 
 
-main()
+#main()
+plotting()

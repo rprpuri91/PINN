@@ -67,6 +67,12 @@ class PINN_Poisuelle(nn.Module):
 
         self.V_max = self.v.max()
         self.V_min = self.v.min()
+        for i in range(len(layers)-1):
+            nn.init.xavier_normal_(self.linears[i].weight.data, gain =5/3)
+
+            nn.init.zeros_(self.linears[i].bias.data)
+
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     def forward(self, X):
 
@@ -164,46 +170,43 @@ class PINN_Poisuelle(nn.Module):
 
         if torch.is_tensor(X) != True:
             X = torch.from_numpy(X).to(self.device)
-        v1 = torch.ones([X.shape[0], 1], device=self.device)
-
-        X = torch.split(X, 1, dim=1)
-
-        x = X[0]
-        r = X[1]
 
 
-        u, u_x_r = torch.autograd.functional.vjp(self.velocity_pred, (x,r), v1, create_graph=True)
-        u_r = u_x_r[1]
-        H = torch.autograd.functional.hessian(self.velocity_pred2, (x,r))
-        u_rr = torch.diagonal(H[1][1], 0)
-        u_rr = torch.reshape(u_rr,(u_rr.shape[0],1))
-        #u_r = u_x_r[:,1]
-        #u_rr = u_xx_rr[:,1]
-        print(u_rr)
-        print(u_r)
+        g = torch.clone(X)
+        g.requires_grad = True
+
+        u_norm = self.forward(g)
+
+        u_x_r = torch.autograd.grad(u_norm, g, torch.ones([X.shape[0], 1]).to(self.device), retain_graph=True,
+                                    create_graph=True)[0]
+        u_r = u_x_r[:,1]
+        u_xx_rr = torch.autograd.grad(u_x_r, g, torch.ones(X.shape).to(self.device), create_graph=True)[0]
+        u_rr = u_xx_rr[:, 1]
+        #print(u_rr)
+        #print(u_r)
         '''print(X[:,1])
         print(torch.div(u_r,X[:,1]))'''
-        G = torch.full((u_rr.shape), -self.G)
-        res = G - self.mu * (u_rr - torch.div(u_r, r))
 
-        print(res.shape)
+        res = self.mu * (u_rr + torch.div(u_r, g[:,1]))
 
-        return u, res
+        return u_norm, res
 
     def loss(self):
 
         V_train, X_train, V_test, X_test = self.train_test_data(self.x, self.v)
 
-        U, res = self.continuity_equation(X_train)
+        U_norm, res = self.continuity_equation(X_train)
 
-        print('g',G)
-        target = torch.zeros_like(res, device=self.device)
+        G = torch.full((res.shape), -self.G)
+        G_mean = torch.div(G,U_norm)
+        #print('g',G_norm)
+        #target = torch.zeros_like(res, device=self.device)
         #print(target)
-        #loss_continuity = self.loss_function2(res, target)
-        #print('continuity', loss_continuity)
-        loss_velocity = self.loss_function(U, V_train)
+        loss_continuity = self.loss_function2(res, G_mean)
+        print('continuity', loss_continuity)
+        loss_velocity = self.loss_function2(U_norm, V_train)
         print('velocity', loss_velocity)
-        loss =  loss_velocity
+        loss =  loss_velocity +loss_continuity
 
         return loss
 
@@ -245,19 +248,19 @@ class PINN_Poisuelle(nn.Module):
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f'Using {device} device')
 
-R = 0.005
-L = 0.5
-Q = 7.85e-5
+R = 1
+L = 20
+Q = 0.00314
 mu = 0.0010016  # 20°C water
 rho = 1000
-Re = 2000
+Re = 2000 # rho*Q*D/(mu*A) = 2*rho*Q*R/(mu*pi*R*R) = 2000*Q/(mu*pi*R) => Q = mu*pi*R => Q = 0.00314*R
 
 # U = Q/(np.pi*(R^2))
 
 preprocessing = Preprocessing_poiseuille(R, L, Q, mu)
 G = preprocessing.pressure_drop()/L
 x_values = np.arange(0.0, L, 0.05).tolist()
-r_values = np.arange(-R, R, 0.0005).tolist()
+r_values = np.arange(-R, R, 0.05).tolist()
 x_values.append(L)
 r_values.append(R)
 
@@ -273,8 +276,7 @@ layers = np.array([2, 60, 60, 60,60,60, 1])
 
 nu = 0.8
 
-epochs = 1000
-
+epochs = 2000
 def main():
 
     model = PINN_Poisuelle(layers,nu,X_initial,vel_initial,G,mu, device)
@@ -302,7 +304,7 @@ def main():
     v_avg = torch.div(vel_initial,U)
     v_avg_pred = torch.div(v_pred,U)
 
-    result = [v_avg,v_avg_pred, model.training_loss, model.error]
+    result = [v_avg,v_avg_pred, model.training_loss, model.error, error]
     f = open('result_poisueille_flow.pkl', 'wb')
     pickle.dump(result, f)
     f.close()
@@ -315,6 +317,8 @@ def plotting():
 
     v_avg = data0[0]
     v_avg_pred = data0[1]
+    error_values = data0[3]
+    plt.plot(error_values)
     fig, ax = plt.subplots(1, 1)
     ax.plot(v_avg.cpu().detach().numpy(), r, label='U_exact')
     ax.hlines(y=-R, xmin=-1, xmax=5, color='black')
