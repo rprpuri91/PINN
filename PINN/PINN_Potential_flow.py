@@ -255,17 +255,17 @@ class Potential_flow_PINN(nn.Module):
         target1 = torch.zeros_like(laplace_phi, device=self.device)
         target2 = torch.zeros_like(vorticity, device=self.device)
 
-        loss_laplace = self.loss_function(laplace_phi, target1)
+        #loss_laplace = self.loss_function(laplace_phi, target1)
         #print(loss_laplace)
 
-        loss_vorticity = self.loss_function(vorticity, target2)
+        #loss_vorticity = self.loss_function(vorticity, target2)
         #print(loss_vorticity)
 
         # V_train_norm = torch.nn.functional.normalize(V_train, dim=1).float()
         loss_velocity = self.loss_function(V_pred, V_train)
         #print(loss_velocity)
 
-        loss = loss_laplace + loss_velocity + loss_vorticity
+        loss =  loss_velocity
 
         return loss
 
@@ -464,6 +464,6 @@ print(error_vec)
 
 result = [V_pred_norm, V_domain_norm, model.error, model.trainingloss, indices, model.bc_loss, model.inlet_loss,
           model.outlet_loss, model.cyl_bc_loss, model.domain_loss, V_pred, V_domain, X_cyl]
-f = open('result_PINN_potential_flow.pkl', 'wb')
+f = open('result_potential_flow.pkl', 'wb')
 pickle.dump(result, f)
 f.close()
