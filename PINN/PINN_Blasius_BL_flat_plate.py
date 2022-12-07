@@ -216,6 +216,7 @@ class PINN_blasius(nn.Module):
 
         #loss_continuity = self.loss_function(res, target)
         #print('continuity', loss_continuity)
+        #loss_pressure_gradient =
         loss_velocity = self.loss_function(f, f_train)
         print('velocity',loss_velocity)
         loss = loss_velocity
@@ -345,16 +346,16 @@ def plotting():
     error = data0[4]
     print('error',error)
     eta1 = eta[idx,]
-    u0 = g_norm[idx,]
-    u_pred = g_pred[idx,]
+    u0 = g_norm#[idx,]
+    u_pred = g_pred#[idx,]
 
     v0 = (0.5*(torch.mul(eta,g_norm)-f_norm))[idx,]
     v_pred = (0.5*(torch.mul(eta,g_pred)-f_pred))[idx,]
 
     print(f_pred)
     fig, ax = plt.subplots(1, 2)
-    ax[0].plot(u0.cpu().detach().numpy(),eta1, label='u_exact')
-    ax[0].scatter(u_pred.cpu().detach().numpy(),eta1, label='u_pred', marker='x', color='Orange')
+    ax[0].plot(u0.cpu().detach().numpy(),eta, label='u_exact')
+    ax[0].scatter(u_pred.cpu().detach().numpy(),eta, label='u_pred', marker='x', color='Orange')
     ax[0].set_xlabel('$u/U_0$', rotation=0)
     ax[0].set_ylabel('$\eta$', rotation=0)
     #ax.axes.yaxis.set_visible(False)

@@ -425,6 +425,12 @@ import math
 class Potential_flow():
     def __init__(self,device,data,data2,data3):
 
+        plt.rcParams.update({
+
+            "font.family": "times new roman",
+            "mathtext.default": "regular"
+        })
+
 
         self.device = device
 
@@ -436,9 +442,11 @@ class Potential_flow():
         self.error3 = data3[5]
         self.loss3 = data3[6]
         self.V_pred_norm = data[0]
+        self.V_NN_pred_norm = data2[0]
         self.V_test = data[1]
         self.indices = data[4]
-
+        print('Error',self.error[-1])
+        print('Error3', self.error3[-1])
         #if pinn is True:
         self.bc_loss = data[5]
         self.in_loss = data[6]
@@ -446,6 +454,7 @@ class Potential_flow():
         self.cylBc_loss = data[8]
         self.domain_loss = data[9]
         self.V_pred = data[10]
+        self.V_pred_NN = data2[10]
         self.V_domain = data[11]
         self.x_cyl = data[12]
 
@@ -476,7 +485,7 @@ class Potential_flow():
         print(self.V_test.size())
 
         self.error_cpu = torch.tensor(self.error,device=self.device)
-        print('error',self.error_cpu[-1])
+        #print('error',self.error_cpu[-1])
         self.loss_cpu = torch.tensor(self.loss, device=self.device)
         self.error2_cpu = torch.tensor(self.error2, device = self.device)
         self.loss2_cpu = torch.tensor(self.loss2, device = self.device)
@@ -505,6 +514,8 @@ class Potential_flow():
         v_pred_norm_in = torch.zeros_like(X_in1, device = device, dtype=torch.float64)
         v_domain_in = torch.zeros_like(X_in1, device = device, dtype=torch.float64)
         v_pred_in = torch.zeros_like(X_in1, device = device, dtype=torch.float64)
+        v_NN_pred_norm_in = torch.zeros_like(X_in1, device=device, dtype=torch.float64)
+
 
         print('indices',self.indices)
         print('size',X_in1.size()[0])
@@ -513,11 +524,13 @@ class Potential_flow():
             if i in self.indices:
                 v_test_norm_in[i]=0
                 v_pred_norm_in[i]=0
+                v_NN_pred_norm_in[i]=0
                 v_domain_in[i] = 0
                 v_pred_in[i] = 0
             else:
                 v_test_norm_in[i]=self.V_test[count]
                 v_pred_norm_in[i]=self.V_pred_norm[count]
+                v_NN_pred_norm_in[i]=self.V_NN_pred_norm[count]
                 v_domain_in[i] = self.V_domain[count]
                 v_pred_in[i] = self.V_pred[count]
                 count+=1
@@ -552,9 +565,10 @@ class Potential_flow():
         #print(v_test_in)
         self.u_pred_norm_grid = torch.reshape(v_pred_norm_in[:,0], self.x.shape).cpu().detach().numpy()
         self.u_test_norm_grid = torch.reshape(v_test_norm_in[:,0], self.x.shape).cpu().detach().numpy()
+        self.u_pred_NN_norm_grid = torch.reshape(v_NN_pred_norm_in[:,0], self.x.shape).cpu().detach().numpy()
         self.v_pred_norm_grid = torch.reshape(v_pred_norm_in[:, 1], self.x.shape).cpu().detach().numpy()
         self.v_test_norm_grid = torch.reshape(v_test_norm_in[:, 1], self.x.shape).cpu().detach().numpy()
-
+        self.v_pred_NN_norm_grid = torch.reshape(v_NN_pred_norm_in[:,1], self.x.shape).cpu().detach().numpy()
         #print(self.u_test_grid)
 
 
@@ -631,18 +645,19 @@ class Potential_flow():
 
 
 
-        fig, ax = plt.subplots(2, 2, gridspec_kw={'width_ratios': [2.5, 3]})
+        fig, ax = plt.subplots(3, 2, gridspec_kw={'width_ratios': [3, 3]})
         c1=ax[0][0].pcolormesh(self.x,self.y, self.u_test_norm_grid, shading = 'gouraud', label='u_x_exact', vmin=u_test_min, vmax= u_test_max, cmap=plt.get_cmap('YlGnBu'))
-        #fig.colorbar(c1, ax=ax[0][0])
-        ax[0][0].set_title('$U_{exact}$', y=-0.2)
+        cbar=fig.colorbar(c1, ax=ax, aspect=50)
+        cbar.ax.tick_params(labelsize=15)
+        #ax[0][0].set_title('$U_{exact}$', y=-0.2)
         ax[0][0].add_patch(plt.Circle((0, 0), 2, color='Black', fill=False))
         ax[0][0].title.set_fontsize(15)
         ax[0][0].axes.xaxis.set_visible(False)
         ax[0][0].axes.yaxis.set_visible(False)
 
         c2=ax[0][1].pcolormesh(self.x,self.y, self.v_test_norm_grid, shading = 'gouraud', label='v_x_test', vmin=v_test_min, vmax= v_test_max, cmap=plt.get_cmap('YlGnBu'))
-        fig.colorbar(c2, ax=ax[0][1])
-        ax[0][1].set_title('$V_{exact}$', y=-0.2)
+        #fig.colorbar(c2, ax=ax, aspect=50)
+        #ax[0][1].set_title('$V_{exact}$', y=-0.2)
         ax[0][1].add_patch(plt.Circle((0, 0), 2, color='Black', fill=False))
         ax[0][1].title.set_fontsize(15)
         ax[0][1].axes.xaxis.set_visible(False)
@@ -651,7 +666,7 @@ class Potential_flow():
         c3 = ax[1][0].pcolormesh(self.x, self.y, self.u_pred_norm_grid, shading='gouraud', label='u_x_pred', vmin=u_test_min, vmax=u_test_max,
                                  cmap=plt.get_cmap('YlGnBu'))
         #fig.colorbar(c3, ax=ax[1][0])
-        ax[1][0].set_title('$U_{pred}$', y=-0.2)
+        #ax[1][0].set_title('$U_{pred}(PINN)$', y=-0.2)
         ax[1][0].add_patch(plt.Circle((0,0),2, color='Black', fill=False))
         ax[1][0].title.set_fontsize(15)
         ax[1][0].axes.xaxis.set_visible(False)
@@ -659,13 +674,32 @@ class Potential_flow():
 
         c4 = ax[1][1].pcolormesh(self.x, self.y, self.v_pred_norm_grid, shading='gouraud', label='v_x_pred', vmin=v_test_min, vmax=v_test_max,
                                  cmap=plt.get_cmap('YlGnBu'))
-        fig.colorbar(c4, ax=ax[1][1])
-        ax[1][1].set_title('$V_{pred}$', y=-0.2)
+        #fig.colorbar(c4, ax=ax[1][1])
+        #ax[1][1].set_title('$V_{pred}(PINN)$', y=-0.2)
         ax[1][1].add_patch(plt.Circle((0, 0), 2, color='Black', fill=False))
         ax[1][1].title.set_fontsize(15)
         ax[1][1].axes.xaxis.set_visible(False)
         ax[1][1].axes.yaxis.set_visible(False)
 
+        c5 = ax[2][0].pcolormesh(self.x, self.y, self.u_pred_NN_norm_grid, shading='gouraud', label='u_x_pred',
+                                 vmin=u_test_min, vmax=u_test_max,
+                                 cmap=plt.get_cmap('YlGnBu'))
+        # fig.colorbar(c3, ax=ax[1][0])
+        #ax[2][0].set_title('$U_{pred}(DNN)$', y=-0.2)
+        ax[2][0].add_patch(plt.Circle((0, 0), 2, color='Black', fill=False))
+        ax[2][0].title.set_fontsize(15)
+        ax[2][0].axes.xaxis.set_visible(False)
+        ax[2][0].axes.yaxis.set_visible(False)
+
+        c6 = ax[2][1].pcolormesh(self.x, self.y, self.v_pred_NN_norm_grid, shading='gouraud', label='v_x_pred',
+                                 vmin=v_test_min, vmax=v_test_max,
+                                 cmap=plt.get_cmap('YlGnBu'))
+        #fig.colorbar(c6, ax=ax[2][1])
+        #ax[2][1].set_title('$V_{pred}(DNN)$', y=-0.2)
+        ax[2][1].add_patch(plt.Circle((0, 0), 2, color='Black', fill=False))
+        ax[2][1].title.set_fontsize(15)
+        ax[2][1].axes.xaxis.set_visible(False)
+        ax[2][1].axes.yaxis.set_visible(False)
 
         plt.show()
 
@@ -674,10 +708,11 @@ class Potential_flow():
         s1 = ax[0].streamplot(self.x, self.y, self.u_test_grid, self.v_test_grid, density=2, color=self.U_grid,
                               cmap='rainbow')
         c1 = fig.colorbar(s1.lines, ax=ax[0])
-        c1.set_label('$u_{mag}$/U', rotation=0, labelpad=20)
+        c1.set_label('$u_{mag}$/U', rotation=0, labelpad=25, fontsize = 20, fontfamily = 'times new roman')
+        c1.ax.tick_params(labelsize=15)
         ax[0].plot(self.x_cyl[:, 0], self.x_cyl[:, 1], color='black')
         #ax[0].plot([-2.0,2.0], [0.0,0.0])
-        ax[0].annotate('<-------- D -------->', xy=(-2.0, -0.1), xycoords='data', fontsize=10)
+        ax[0].annotate('<------ D ------>', xy=(-2.0, -0.1), xycoords='data', fontsize=20, fontfamily='times new roman')
         ax[0].axes.xaxis.set_visible(False)
         ax[0].axes.yaxis.set_visible(False)
 
@@ -693,15 +728,18 @@ class Potential_flow():
 
 
 class Plotting():
-    def __init__(self,data):
+    def __init__(self,data, data2):
     
 
         self.result = data
+        self.result2 = data2
 
         self.V_pred = self.result[0]
+        self.V_NN_pred = self.result2[0]
         self.V_domain = self.result[1]
                 
         V_pred_norm = self.result[2]
+        V_NN_pred_norm = self.result2[2]
         V_in_norm = self.result[3]
         indices = self.result[4]
         self.X_boundary_sort = self.result[7]
@@ -723,6 +761,12 @@ class Plotting():
         print(noy)
 
         dec = 1
+
+        plt.rcParams.update({
+
+            "font.family": "times new roman",
+            "mathtext.default": "regular"
+        })
 
         #x_values = np.linspace(x_min, x_max, nox).tolist()
         #y_values = np.linspace(y_min, y_max, noy).tolist()
@@ -749,6 +793,7 @@ class Plotting():
         v_pred_in_norm = torch.zeros_like(X_in1, device= device, dtype=torch.float64)
         v_test_in = torch.zeros_like(X_in1, device= device, dtype=torch.float64)
         v_pred_in = torch.zeros_like(X_in1, device= device, dtype=torch.float64)
+        v_NN_pred_in_norm = torch.zeros_like(X_in1, device= device, dtype=torch.float64)
 
         c = 0
 
@@ -758,11 +803,13 @@ class Plotting():
                 v_pred_in[i]=0
                 v_test_in_norm[i]=0
                 v_pred_in_norm[i]=0
+                v_NN_pred_in_norm[i]=0
             else:
                 v_test_in[i]=self.V_domain[c]
                 v_pred_in[i]=self.V_pred[c]
                 v_test_in_norm[i]=V_in_norm[c]
                 v_pred_in_norm[i]=V_pred_norm[c]
+                v_NN_pred_in_norm[i]=V_NN_pred_norm[c]
                 c+=1
 
                      
@@ -774,6 +821,8 @@ class Plotting():
         #normalized
         up_norm = v_pred_in_norm[:,0]
         vp_norm = v_pred_in_norm[:,1]
+        up_NN_norm = v_NN_pred_in_norm[:,0]
+        vp_NN_norm = v_NN_pred_in_norm[:,1]
         u0_norm = v_test_in_norm[:,0]
         v0_norm = v_test_in_norm[:,1]
 
@@ -784,6 +833,8 @@ class Plotting():
 
         self.u_grid_norm = torch.reshape(up_norm, self.x.shape).cpu().detach().numpy()
         self.v_grid_norm = torch.reshape(vp_norm, self.y.shape).cpu().detach().numpy()
+        self.u_NN_grid_norm = torch.reshape(up_NN_norm, self.y.shape).cpu().detach().numpy()
+        self.v_NN_grid_norm = torch.reshape(vp_NN_norm, self.y.shape).cpu().detach().numpy()
 
         self.u0_grid_norm = torch.reshape(u0_norm, self.x.shape).cpu().detach().numpy()
         self.v0_grid_norm = torch.reshape(v0_norm, self.y.shape).cpu().detach().numpy()
@@ -823,13 +874,13 @@ class Plotting():
         v_grid_max = self.v0_grid_norm.max()
         v_grid_min = self.v0_grid_norm.min()
 
-        fig, ax = plt.subplots(2, 2,gridspec_kw={'width_ratios': [2.5, 3]})
+        fig, ax = plt.subplots(3, 2,gridspec_kw={'width_ratios': [3, 3]})
         c1=ax[0][0].pcolormesh(self.x,self.y, self.u0_grid_norm, shading = 'gouraud', label='u_x_exact', vmin=u_grid_min, vmax= u_grid_max, cmap=plt.get_cmap('YlGnBu'))
-        #fig.colorbar(c1, ax=ax[0][0])
-
+        cbar = fig.colorbar(c1, ax=ax, aspect=50)
+        cbar.ax.tick_params(labelsize=15)
         ax[0][0].plot(self.X_boundary_sort[:, 0], self.X_boundary_sort[:, 1], color='black')
         ax[0][0].hlines(y=0, xmin=-8.0, xmax=8.0, color='black')
-        ax[0][0].set_title('$U_{exact}$', y=-0.2)
+        #ax[0][0].set_title('$U_{exact}$', y=-0.2)
         ax[0][0].title.set_fontsize(15)
         ax[0][0].axes.xaxis.set_visible(False)
         ax[0][0].axes.yaxis.set_visible(False)
@@ -840,31 +891,53 @@ class Plotting():
 
         ax[1][0].plot(self.X_boundary_sort[:, 0], self.X_boundary_sort[:, 1], color='black')
         ax[1][0].hlines(y=0, xmin=-8.0, xmax=8.0, color='black')
-        ax[1][0].set_title('$U_{pred}$', y=-0.2)
+        #ax[1][0].set_title('$U_{pred}(PINN)$', y=-0.2)
         ax[1][0].title.set_fontsize(15)
         ax[1][0].axes.xaxis.set_visible(False)
         ax[1][0].axes.yaxis.set_visible(False)
 
         c3=ax[0][1].pcolormesh(self.x,self.y, self.v0_grid_norm, shading = 'gouraud', label='v_x_exact', vmin=v_grid_min, vmax= v_grid_max, cmap=plt.get_cmap('YlGnBu'))
-        fig.colorbar(c3, ax=ax[0][1])
+        #fig.colorbar(c3, ax=ax[0][1])
 
         ax[0][1].plot(self.X_boundary_sort[:, 0], self.X_boundary_sort[:, 1], color='black')
         ax[0][1].hlines(y=0, xmin=-8.0, xmax=8.0, color='black')
-        ax[0][1].set_title('$V_{exact}$', y=-0.2)
+        #ax[0][1].set_title('$V_{exact}$', y=-0.2)
         ax[0][1].title.set_fontsize(15)
         ax[0][1].axes.xaxis.set_visible(False)
         ax[0][1].axes.yaxis.set_visible(False)
 
 
         c4=ax[1][1].pcolormesh(self.x,self.y, self.v_grid_norm, shading = 'gouraud', label='v_x_pred', vmin=v_grid_min, vmax= v_grid_max, cmap=plt.get_cmap('YlGnBu'))
-        fig.colorbar(c4, ax=ax[1][1])
+        #fig.colorbar(c4, ax=ax[1][1])
 
         ax[1][1].plot(self.X_boundary_sort[:, 0], self.X_boundary_sort[:, 1], color='black')
         ax[1][1].hlines(y=0, xmin=-8.0, xmax=8.0, color='black')
-        ax[1][1].set_title('$V_{pred}$', y=-0.2)
+        #ax[1][1].set_title('$V_{pred}(PINN)$', y=-0.2)
         ax[1][1].title.set_fontsize(15)
         ax[1][1].axes.xaxis.set_visible(False)
         ax[1][1].axes.yaxis.set_visible(False)
+
+        c5 = ax[2][0].pcolormesh(self.x, self.y, self.u_NN_grid_norm, shading='gouraud', label='v_x_exact',
+                                 vmin=u_grid_min, vmax=u_grid_max, cmap=plt.get_cmap('YlGnBu'))
+        #fig.colorbar(c3, ax=ax[2][0])
+
+        ax[2][0].plot(self.X_boundary_sort[:, 0], self.X_boundary_sort[:, 1], color='black')
+        ax[2][0].hlines(y=0, xmin=-8.0, xmax=8.0, color='black')
+        #ax[2][0].set_title('$U_{pred}(DNN)$', y=-0.2)
+        ax[2][0].title.set_fontsize(15)
+        ax[2][0].axes.xaxis.set_visible(False)
+        ax[2][0].axes.yaxis.set_visible(False)
+
+        c6 = ax[2][1].pcolormesh(self.x, self.y, self.v_NN_grid_norm, shading='gouraud', label='v_x_pred', vmin=v_grid_min,
+                                 vmax=v_grid_max, cmap=plt.get_cmap('YlGnBu'))
+        #fig.colorbar(c6, ax=ax[2][1])
+
+        ax[2][1].plot(self.X_boundary_sort[:, 0], self.X_boundary_sort[:, 1], color='black')
+        ax[2][1].hlines(y=0, xmin=-8.0, xmax=8.0, color='black')
+        #ax[2][1].set_title('$V_{pred}(DNN)$', y=-0.2)
+        ax[2][1].title.set_fontsize(15)
+        ax[2][1].axes.xaxis.set_visible(False)
+        ax[2][1].axes.yaxis.set_visible(False)
 
 
         plt.show()
@@ -880,22 +953,55 @@ class Plotting():
     def streamplot(self):
 
         fig, ax = plt.subplots(2,1)
-        s1 = ax[0].streamplot(self.x1,self.y1,self.u0_grid, self.v0_grid, density=2,color = self.U_grid, cmap='rainbow')
-        c1 = fig.colorbar(s1.lines, ax =ax[0])
-        c1.set_label('$u_{mag}$/U', rotation=0, labelpad=20)
-        ax[0].plot(self.X_boundary_sort[:,0], self.X_boundary_sort[:,1], color='black')
-        ax[0].hlines(y=0,xmin=-8.0,xmax=8.0, color='black')
-        ax[0].plot(2,0, color = 'red', marker = 'o')
-        ax[0].plot(-2,0, color = 'red', marker = 'o')
-        ax[0].annotate('<-------- 2a -------->', xy=(-2.0, 0.1), xycoords='data', fontsize=9.7)
+
+        ##
+        file0 = open('result_PINN_potential_flow.pkl', 'rb')
+        file1 = open('result_potential_flow.pkl', 'rb')
+        data0 = pickle.load(file0)
+        data1 = pickle.load(file1)
+        plot0 = Potential_flow(device, data0, data1, data2)
+        s2 = ax[0].streamplot(plot0.x, plot0.y, plot0.u_test_grid, plot0.v_test_grid, density=2, color=plot0.U_grid,
+                              cmap='rainbow')
+        c2 = fig.colorbar(s2.lines, ax=ax, aspect=50)
+        #c2.set_label('$u_{mag}$/U', rotation=0, labelpad=30, fontsize=20, fontfamily='times new roman')
+        c2.ax.tick_params(labelsize=15)
+        c2.set_ticks((0.0,0.5, 1.0,1.5,2.0))
+        ax[0].plot(plot0.x_cyl[:, 0], plot0.x_cyl[:, 1], color='black')
+        # ax[0].plot([-2.0,2.0], [0.0,0.0])
+        #ax[0].annotate('<------ D ------>', xy=(-2.0, -0.1), xycoords='data', fontsize=20, fontfamily='times new roman')
         ax[0].axes.xaxis.set_visible(False)
         ax[0].axes.yaxis.set_visible(False)
+        '''plt.setp(ax[0].get_xticklabels(), visible=False)
+        plt.setp(ax[0].get_yticklabels(), visible=False)
+        ax[0].tick_params(axis='both', which='both', length=0)
+        ax[0].set_xlabel('x', rotation=0, labelpad=5, fontsize=15, fontfamily='times new roman')
+        ax[0].set_ylabel('y', rotation=0, labelpad=10, fontsize=15, fontfamily='times new roman')'''
+        ##
 
+
+        s1 = ax[1].streamplot(self.x1,self.y1,self.u0_grid, self.v0_grid, density=2,color = self.U_grid, cmap='rainbow')
+        #c1 = fig.colorbar(s1.lines, ax =ax[1])
+        #c1.set_label(r'$u_{mag}/U$', rotation=0, labelpad=30,fontsize=20, fontfamily='times new roman')
+        #c1.ax.tick_params(labelsize=15)
+        #c1.set_ticks((0.0, 0.5,1.0, 1.5))
+        ax[1].plot(self.X_boundary_sort[:,0], self.X_boundary_sort[:,1], color='black')
+        ax[1].hlines(y=0,xmin=-8.0,xmax=8.0, color='black')
+        ax[1].plot(2,0, color = 'red', marker = 'o')
+        ax[1].plot(-2,0, color = 'red', marker = 'o')
+        #ax[1].annotate('<------ 2a ------>', xy=(-2.0, 0.1), xycoords='data', fontsize=20, fontfamily='times new roman')
+        ax[1].axes.xaxis.set_visible(False)
+        ax[1].axes.yaxis.set_visible(False)
+        '''plt.setp(ax[1].get_xticklabels(), visible=False)
+        plt.setp(ax[1].get_yticklabels(), visible=False)
+        ax[1].tick_params(axis='both', which='both', length=0)
+        ax[1].set_xlabel('x', rotation=0, labelpad=5,fontsize=15, fontfamily='times new roman')
+        ax[1].set_ylabel('y', rotation=0, labelpad=10, fontsize=15, fontfamily='times new roman')
+        
         s2 = ax[1].streamplot(self.x1,self.y1,self.u_grid, self.v_grid, density=2, color = self.U_grid, cmap='rainbow')
         fig.colorbar(s2.lines, ax=ax[1])
         ax[1].plot(self.X_boundary_sort[:, 0], self.X_boundary_sort[:, 1], color='black')
         ax[1].hlines(y=0, xmin=-8.0, xmax=8.0, color='black')
-
+        '''
         plt.show()
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -903,10 +1009,12 @@ print(f'Using {device} device')
 
 file2 = open('result_rankine_oval_potential_flow.pkl', 'rb')
 data2 = pickle.load(file2)
+file3 = open('result_NN_rankine_oval_potential_flow.pkl', 'rb')
+data3 = pickle.load(file3)
 
-#plot = Plotting(data2)
+plot = Plotting(data2,data3)
 
-#plot.density_plot_norm()
+plot.density_plot_norm()
 #plot.streamplot()
 #plot.density_plot()
 
@@ -920,6 +1028,6 @@ data1 = pickle.load(file1)
 plot0 = Potential_flow(device,data0,data1,data2)
 
 #error_plot = plot0.error_loss_plot()
-density = plot0.density_plot()
+#density = plot0.density_plot()
 #stream = plot0.streamline()
 
