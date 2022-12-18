@@ -10,8 +10,12 @@ import os
 import matplotlib.pyplot as plt
 import scipy as sc
 from sympy import *
+from scipy.signal import lfilter
+import tikzplotlib as mt
 
+torch.manual_seed(1234)
 
+np.random.seed(1234)
 class Preprocessing_poiseuille():
     def __init__(self, R, L, Q, mu):
         self.R = R
@@ -33,7 +37,7 @@ class Preprocessing_poiseuille():
 
         vel = np.array(u)
         vel = torch.from_numpy(vel).float().to(device)
-        return vel
+        return torch.reshape(vel, (vel.shape[0],1))
 
     def pressure(self,X):
         x = X[:,0]
@@ -45,20 +49,23 @@ class Preprocessing_poiseuille():
 
         p = np.array(p)
         p_tensor = torch.from_numpy(p).float().to(device)
-        return p_tensor
+        return torch.reshape(p_tensor, (p_tensor.shape[0],1))
 
 
 class PINN_Poisuelle(nn.Module):
-    def __init__(self, layers,nu,X_in,vel_in, p_in,G,mu, device):
+    def __init__(self, layers,nu,X_domain,U_domain,X_wall,U_wall,G,mu, device):
         super().__init__()
         self.layers = layers
         self.nu = nu
-        self.x = X_initial
+        self.X_domain = X_domain
+        self.X_wall = X_wall
         self.mu = mu
-        self.v = vel_initial
+        self.U_domain = U_domain
+        self.U_wall = U_wall
         self.device = device
         self.G = G
-        self.p = p_in
+
+
 
         # Activation
         self.activation = nn.Tanh()
@@ -78,14 +85,14 @@ class PINN_Poisuelle(nn.Module):
         self.training_loss = []
         self.error = []
 
-        self.V_max = self.v.max()
-        self.V_min = self.v.min()
-        for i in range(len(layers)-1):
+        self.V_max = self.U_domain.max()
+        self.V_min = self.U_domain.min()
+        '''for i in range(len(layers)-1):
             nn.init.xavier_normal_(self.linears[i].weight.data, gain =5/3)
 
             nn.init.zeros_(self.linears[i].bias.data)
 
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'''
 
     def forward(self, X):
 
@@ -141,7 +148,7 @@ class PINN_Poisuelle(nn.Module):
         X_norm = (X - x_min)/(x_max-x_min)
         return X_norm
 
-    def train_test_data(self, X, V,P):
+    def train_test_data(self, X, V):
 
         N_u = int(self.nu * len(X))
 
@@ -149,7 +156,7 @@ class PINN_Poisuelle(nn.Module):
 
         X_star = X[idx,]
         V_train = V[idx,].float()
-        P_train = P[idx,]
+
 
         X_test = np.delete(X, idx, axis=0)
         idxtest = []
@@ -161,23 +168,15 @@ class PINN_Poisuelle(nn.Module):
                 idxtest.append(i)
 
         V_test = V[idxtest,].float()
-        P_test = P[idxtest,].float()
+
 
         X_train = torch.from_numpy(X_star).float().to(self.device)
         X_test = torch.from_numpy(X_test).float().to(self.device)
 
         V_train = self.normalize_velocity(V_train)
         V_test = self.normalize_velocity(V_test)
-        P_train = self.normalize(P_train)
-        P_test = self.normalize(P_test)
-        V_train = torch.reshape(V_train, (V_train.shape[0], 1))
-        V_test = torch.reshape(V_test, (V_test.shape[0], 1))
-        P_train = torch.reshape(P_train, (P_train.shape[0], 1))
-        P_test = torch.reshape(P_test, (P_test.shape[0], 1))
 
-
-
-        return V_train, X_train, V_test, X_test, P_train, P_test
+        return V_train, X_train, V_test, X_test
 
     def variable_pred(self, x, r):
         g = torch.cat((x, r), dim=1)
@@ -236,9 +235,9 @@ class PINN_Poisuelle(nn.Module):
         #print('res', res.shape)
         return U, u_x, res, p_r
 
-    def loss(self):
+    def loss(self,x,v):
 
-        V_train, X_train, V_test, X_test, P_train, P_test = self.train_test_data(self.x, self.v, self.p)
+        V_train, X_train, V_test, X_test= self.train_test_data(x, v)
 
         U, res, u_x, p_r = self.governing_equation(X_train)
 
@@ -246,8 +245,6 @@ class PINN_Poisuelle(nn.Module):
         target2 = torch.zeros_like(u_x, device=self.device)
         target3 = torch.zeros_like(p_r, device=self.device)
 
-        u = torch.reshape(U[:,0],(U[:,0].shape[0],1))
-        p = torch.reshape(U[:,1],(U[:,1].shape[0],1))
 
         loss_residual = self.loss_function(res, target1)
         #print('residual', loss_residual)
@@ -258,13 +255,20 @@ class PINN_Poisuelle(nn.Module):
         loss_ux = self.loss_function(u_x, target2)
         #print('loss ux',loss_ux)
 
-        loss_velocity = self.loss_function(u, V_train)
+        loss_variable = self.loss_function(U, V_train)
         #print('velocity', loss_velocity)
 
-        loss_presure = self.loss_function(p, P_train)
-        #print('loss_pressure', loss_presure)
 
-        loss =  loss_velocity + loss_presure #+loss_residual + loss_diff_pressure #+ loss_ux
+        loss =  loss_variable  +loss_residual + loss_diff_pressure + 0.001*loss_ux
+
+        return loss
+
+    def total_loss(self):
+
+        loss1 = self.loss(self.X_domain,self.U_domain)
+        loss2 = self.loss(self.X_wall, self.U_wall)
+
+        loss = loss1+ loss2
 
         return loss
 
@@ -272,7 +276,7 @@ class PINN_Poisuelle(nn.Module):
 
         optimizer.zero_grad()
 
-        loss = self.loss()
+        loss = self.total_loss()
 
         loss.backward()
 
@@ -280,7 +284,7 @@ class PINN_Poisuelle(nn.Module):
 
         self.iter += 1
 
-        V_train, X_train, V_test, X_test, P_train, P_test = self.train_test_data(self.x, self.v, self.p)
+        V_train, X_train, V_test, X_test = self.train_test_data(self.X_domain, self.U_domain)
 
         if self.iter % self.divider == 0:
             self.training_loss.append(loss)
@@ -294,12 +298,12 @@ class PINN_Poisuelle(nn.Module):
     def test(self, model, X_test, V_test):
 
         U = model.forward(X_test)
-        u_pred = U[:,0]
 
-        error_vec = torch.linalg.norm((V_test - u_pred), 2) / torch.linalg.norm(V_test,2)  # Relative L2 Norm of the error (vector)
+
+        error_vec = torch.linalg.norm((V_test - U), 2) / torch.linalg.norm(V_test,2)  # Relative L2 Norm of the error (vector)
         # V_pred = V_pred.cpu().detach().numpy()
 
-        return error_vec, u_pred
+        return error_vec, U
 
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -324,14 +328,32 @@ r_values.append(R)
 x, r = np.meshgrid(x_values, r_values)
 
 X_in = np.hstack([x.flatten()[:, None], r.flatten()[:, None]])
+print(X_in.shape)
+X_wall_lower = np.hstack((x[0,:][:, None], r[0,:][:, None]))
+
+X_wall_upper = np.hstack((x[0,:][:, None], r[-1,:][:, None]))
+
+X_wall = np.vstack([X_wall_upper, X_wall_lower])
 
 X_initial = np.hstack((x[:, 0][:, None], r[:, 0][:, None]))
-
-print(X_in.shape)
-
 vel_initial = preprocessing.velocity(X_initial)
-vel_in = preprocessing.velocity(X_in)
-p_in = preprocessing.pressure(X_in)
+p_initial = preprocessing.pressure(X_initial)
+U_initial = torch.cat((vel_initial,p_initial), dim=1)
+
+vel_wall = preprocessing.velocity(X_wall)
+p_wall = preprocessing.pressure(X_wall)
+
+U_wall = torch.cat((vel_wall,p_wall),dim=1)
+
+N_x = int(0.2 * len(X_in))
+idx = np.random.choice(X_in.shape[0], N_x, replace=False)
+
+X_domain = X_in[idx, :]
+
+vel_domain = preprocessing.velocity(X_domain)
+p_domain = preprocessing.pressure(X_domain)
+
+U_domain = torch.cat((vel_domain,p_domain),dim=1)
 
 layers = np.array([2, 60, 60, 60,60,60, 2])
 
@@ -340,13 +362,13 @@ nu = 0.8
 epochs = 5000
 def main():
 
-    model = PINN_Poisuelle(layers,nu,X_in,vel_in,p_in,G,mu, device)
+    model = PINN_Poisuelle(layers,nu,X_domain,U_domain,X_wall,U_wall,G,mu, device)
 
     model.to(device)
 
     start_time = time.time()
 
-    optimizerA = torch.optim.Adam(model.parameters(), lr=0.001)
+    optimizerA = torch.optim.Adam(model.parameters(), lr=0.005)
     optimizerB = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 
     optimizerC = torch.optim.LBFGS(model.parameters(), lr=0.001,
@@ -368,12 +390,14 @@ def main():
 
     print('Training time: %.2f' % (elapsed))
 
-    V_norm = model.normalize_velocity(vel_initial)
-    error, V_pred_norm = model.test(model, X_initial, V_norm)
+    U_norm = model.normalize_velocity(U_initial)
+    error, U_pred_norm = model.test(model, X_initial, U_norm)
 
-    v_pred = model.denormalize_velocity(V_pred_norm)
+    #v_pred = model.denormalize_velocity(U_pred_norm)
     U = Q/(np.pi*(R**2))
 
+    v_pred_norm = U_pred_norm[:,0]
+    v_pred = v_pred_norm * (vel_initial.max() - vel_initial.min()) + vel_initial.min()
     v_avg = torch.div(vel_initial,U)
     v_avg_pred = torch.div(v_pred,U)
 
@@ -396,8 +420,17 @@ def plotting():
     v_avg_sgd_pred = data0[1]
     v_avg_NN_pred = data1[1]
     v_avg_adam_pred = data2[1]
-    error = data0[4]
-    print(error)
+    error0 = data0[3]
+    error1 = data1[3]
+    error2 = data2[3]
+
+    errorA = data0[-1]
+    errorB = data1[-1]
+
+    print('PINN',errorA)
+    print('DNN',errorB)
+
+    print(error0)
     fig, ax = plt.subplots(1, 1)
     ax.plot(v_avg.cpu().detach().numpy(), X_initial[:,1], label='U_exact')
     ax.hlines(y=-R, xmin=-1, xmax=5, color='black')
@@ -414,9 +447,10 @@ def plotting():
     ax.set_xticklabels((0,0.5,1,1.5,2))
     ax.scatter(v_avg_sgd_pred.cpu().detach().numpy(), X_initial[:,1], label='U_pred_sgd_PINN', marker='s', color='Orange')
     ax.scatter(v_avg_NN_pred.cpu().detach().numpy(), X_initial[:, 1], label='U_pred_adam_DNN', marker='.', color='Black')
-    ax.scatter(v_avg_adam_pred.cpu().detach().numpy(), X_initial[:, 1], label='U_pred_adam_PINN', marker='x', color='Red')
+    #ax.scatter(v_avg_adam_pred.cpu().detach().numpy(), X_initial[:, 1], label='U_pred_adam_PINN', marker='x', color='Red')
     #ax.set_title('$u_x/U$', y=-0.1)
     ax.legend(loc='best')
+    ax.axis('off')
     #ax[1].hlines(y=-R, xmin=-1, xmax=5, color='black')
     #ax[1].hlines(y=R, xmin=-1, xmax=5, color='black')
     #ax[1].set_xlabel('$u_x$/U', rotation=0)
@@ -424,8 +458,44 @@ def plotting():
     #ax[1].set_xlim(-1, 5)
 
     #######################################
+    error0_cpu = torch.tensor(error0, device=device)
+    error1_cpu = torch.tensor(error1, device=device)
+    error2_cpu = torch.tensor(error2, device=device)
+
+    n = 30
+    b = [1.0 / n] * n
+    a =1
+
+    e1 = lfilter(b,a,error0_cpu)
+    e2 = lfilter(b, a, error1_cpu)
+    e3 = lfilter(b, a, error2_cpu)
+    #error_loss_plot(e1,e2,e3)
+    #mt.save('poiseuille_result.tex')
+
     plt.show()
 
+def error_loss_plot(e1,e2,e3):
+    e= int(epochs/5)
+    xmax = int(e)
+
+    x1 = [*range(1, xmax + 1)]
+    fig,ax = plt.subplots(1,1)
+    ax.plot(x1,e1, label='PINN')
+    ax.plot(x1, e2, label='DNN')
+    #ax.plot(x1, e3, label='PINN with ADAM')
+    #ax[0][0].set_yscale('log')
+    ax.set_ylim(1,2)
+    #ax.set_yticks((0,0.01,0.02,0.03,0.04,0.05,0.1))
+    ax.set_xlim(e/5,e)
+    ax.set_xticks((e/5,2*e/5,3*e/5,4*e/5,e))
+    ax.set_xticklabels((epochs/5,2*epochs/5,3*epochs/5,4*epochs/5,epochs), fontsize=10)
+    ax.set_ylabel('$\epsilon$')
+    ax.set_xlabel('Epochs')
+    #ax.xaxis.label.set_fontsize(15)
+    #ax.yaxis.label.set_fontsize(15)
+    ax.grid()
+    #ax.legend()
+    mt.save('poiseuille_error.tex')
 
 
 

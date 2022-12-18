@@ -13,6 +13,7 @@ from matplotlib.ticker import LinearLocator, FormatStrFormatter
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm
 #from scipy.signal import lfilter
+import tikzplotlib as mt
 
 from matplotlib.colors import BoundaryNorm
 from matplotlib.ticker import MaxNLocator
@@ -445,8 +446,8 @@ class Potential_flow():
         self.V_NN_pred_norm = data2[0]
         self.V_test = data[1]
         self.indices = data[4]
-        print('Error',self.error[-1])
-        print('Error3', self.error3[-1])
+        print('Error PINN',self.error[-1])
+        print('Error DNN', self.error2[-1])
         #if pinn is True:
         self.bc_loss = data[5]
         self.in_loss = data[6]
@@ -494,7 +495,8 @@ class Potential_flow():
         print(self.error_cpu.shape)
         print(self.error3_cpu.shape)
         self.epochs = 5000
-
+        print('e1',self.error_cpu.shape)
+        print('e2',self.error2_cpu.shape)
         self.xmax = int(self.epochs/5)
 
         self.x1 = [*range(1,self.xmax+1)]
@@ -574,25 +576,25 @@ class Potential_flow():
 
     def error_loss_plot(self):
         e= int(self.epochs/5)
-        fig,ax = plt.subplots(2,1)
-        ax[0].plot(self.x1,self.error_cpu, label='PINN Potential flow cylinder error')
-        ax[0].plot(self.x1, self.error2_cpu, label='NN Potential flow cylinder error')
-        ax[0].plot(self.x1, self.error3_cpu, label='NN Rankine oval flow cylinder error')
+        fig,ax = plt.subplots(1,1)
+        ax.plot(self.x1,self.error_cpu, label='PINN with ADAM')
+        ax.plot(self.x1, self.error2_cpu, label='DNN with ADAM')
+        #ax[0].plot(self.x1, self.error3_cpu, label='NN Rankine oval flow cylinder error')
         #ax[0][0].set_yscale('log')
-        ax[0].set_ylim(0,0.5)
-        ax[0].set_yticks((0,0.05,0.08,0.1,0.2,0.3,0.5))
-        ax[0].set_xticks((0,e/5,2*e/5,3*e/5,4*e/5,e))
-        ax[0].set_xticklabels((0,self.epochs/5,2*self.epochs/5,3*self.epochs/5,4*self.epochs/5,self.epochs), fontsize=10)
-        ax[0].set_ylabel('L2 Error')
-        ax[0].set_xlabel('Iterations')
-        ax[0].xaxis.label.set_fontsize(15)
-        ax[0].yaxis.label.set_fontsize(15)
-        ax[0].grid()
-        ax[0].legend()
-
-        ax[1].plot(self.x1,self.loss_cpu, label='PINN Potential flow cylinder loss')
+        ax.set_ylim(0,0.5)
+        ax.set_yticks((0,0.05,0.1,0.2,0.3,0.5))
+        ax.set_xticks((0,e/5,2*e/5,3*e/5,4*e/5,e))
+        ax.set_xticklabels((0,self.epochs/5,2*self.epochs/5,3*self.epochs/5,4*self.epochs/5,self.epochs), fontsize=10)
+        ax.set_ylabel('L2 Error')
+        ax.set_xlabel('Iterations')
+        ax.xaxis.label.set_fontsize(15)
+        ax.yaxis.label.set_fontsize(15)
+        ax.grid()
+        #ax.legend()
+        mt.save("error_cyl.tex")
+        '''ax[1].plot(self.x1,self.loss_cpu, label='PINN Potential flow cylinder loss')
         ax[1].plot(self.x1, self.loss2_cpu, label='NN Potential flow cylinder loss')
-        ax[1].plot(self.x1, self.loss3_cpu, label='NN Rankine oval flow cylinder loss')
+        #ax[1].plot(self.x1, self.loss3_cpu, label='NN Rankine oval flow cylinder loss')
         #ax[0][0].set_yscale('log')
         ax[1].set_ylim(0, 0.03)
         ax[1].set_yticks((0, 0.01, 0.02, 0.03))
@@ -603,7 +605,7 @@ class Potential_flow():
         ax[1].xaxis.label.set_fontsize(15)
         ax[1].yaxis.label.set_fontsize(15)
         ax[1].grid()
-        ax[1].legend()
+        ax[1].legend()'''
 
         plt.show()
 
@@ -635,6 +637,65 @@ class Potential_flow():
         fig.legend(loc='upper right')
         plt.show()
 
+    def density_error_plot(self):
+
+        u_test_min = self.u_test_norm_grid.min()
+        u_test_max = self.u_test_norm_grid.max()
+
+        v_test_max = self.v_test_norm_grid.max()
+        v_test_min = self.v_test_norm_grid.min()
+
+
+
+        fig, ax = plt.subplots(2, 2)
+        x1 = np.abs(np.subtract(self.u_test_norm_grid,self.u_pred_norm_grid))
+        c1=ax[0][0].pcolormesh(self.x,self.y, x1, shading = 'gouraud', label='u_x_exact', vmin=x1.min(), vmax= x1.max(), cmap=plt.get_cmap('rainbow'))
+        cbar=fig.colorbar(c1, ax=ax, aspect=50)
+        #cbar.ax.set_yticklabels(['-0.5','0.0','0.5'])
+        cbar.ax.tick_params(labelsize=15)
+        #ax[0][0].set_title('$U_{exact}$', y=-0.2)
+        ax[0][0].add_patch(plt.Circle((0, 0), 2, color='Black', fill=False))
+        ax[0][0].title.set_fontsize(15)
+        ax[0][0].axes.xaxis.set_visible(False)
+        ax[0][0].axes.yaxis.set_visible(False)
+
+        x2 = np.abs(np.subtract(self.v_test_norm_grid,self.v_pred_norm_grid))
+        c2=ax[0][1].pcolormesh(self.x,self.y, x2, shading = 'gouraud', label='v_x_test', vmin=x2.min(), vmax= x2.max(), cmap=plt.get_cmap('rainbow'))
+        #fig.colorbar(c2, ax=ax, aspect=50)
+        #ax[0][1].set_title('$V_{exact}$', y=-0.2)
+        ax[0][1].add_patch(plt.Circle((0, 0), 2, color='Black', fill=False))
+        ax[0][1].title.set_fontsize(15)
+        ax[0][1].axes.xaxis.set_visible(False)
+        ax[0][1].axes.yaxis.set_visible(False)
+
+        x3 = np.abs(np.subtract(self.u_test_norm_grid, self.u_pred_NN_norm_grid))
+        c3 = ax[1][0].pcolormesh(self.x, self.y, x3,
+                                 shading='gouraud', label='v_x_test', vmin=x1.min(), vmax=x1.max(),
+                                 cmap=plt.get_cmap('rainbow'))
+        # fig.colorbar(c2, ax=ax, aspect=50)
+        # ax[0][1].set_title('$V_{exact}$', y=-0.2)
+        ax[1][0].add_patch(plt.Circle((0, 0), 2, color='Black', fill=False))
+        ax[1][0].title.set_fontsize(15)
+        ax[1][0].axes.xaxis.set_visible(False)
+        ax[1][0].axes.yaxis.set_visible(False)
+
+        x4 = np.abs(np.subtract(self.v_test_norm_grid, self.v_pred_NN_norm_grid))
+        c4 = ax[1][1].pcolormesh(self.x, self.y, x4,
+                                 shading='gouraud', label='v_x_test', vmin=x2.min(), vmax=x2.max(),
+                                 cmap=plt.get_cmap('rainbow'))
+        # fig.colorbar(c2, ax=ax, aspect=50)
+        # ax[0][1].set_title('$V_{exact}$', y=-0.2)
+        ax[1][1].add_patch(plt.Circle((0, 0), 2, color='Black', fill=False))
+        ax[1][1].title.set_fontsize(15)
+        ax[1][1].axes.xaxis.set_visible(False)
+        ax[1][1].axes.yaxis.set_visible(False)
+
+        #mt.save("error_density_cyl.tex")
+
+        plt.show()
+
+
+
     def density_plot(self):
 
         u_test_min = self.u_test_norm_grid.min()
@@ -650,7 +711,7 @@ class Potential_flow():
         cbar=fig.colorbar(c1, ax=ax, aspect=50)
         cbar.ax.tick_params(labelsize=15)
         #ax[0][0].set_title('$U_{exact}$', y=-0.2)
-        ax[0][0].add_patch(plt.Circle((0, 0), 2, color='Black', fill=False))
+        ax[0][0].add_patch(plt.Circle((0, 0), 2, color='White', fill=False))
         ax[0][0].title.set_fontsize(15)
         ax[0][0].axes.xaxis.set_visible(False)
         ax[0][0].axes.yaxis.set_visible(False)
@@ -658,7 +719,7 @@ class Potential_flow():
         c2=ax[0][1].pcolormesh(self.x,self.y, self.v_test_norm_grid, shading = 'gouraud', label='v_x_test', vmin=v_test_min, vmax= v_test_max, cmap=plt.get_cmap('YlGnBu'))
         #fig.colorbar(c2, ax=ax, aspect=50)
         #ax[0][1].set_title('$V_{exact}$', y=-0.2)
-        ax[0][1].add_patch(plt.Circle((0, 0), 2, color='Black', fill=False))
+        ax[0][1].add_patch(plt.Circle((0, 0), 2, color='White', fill=False))
         ax[0][1].title.set_fontsize(15)
         ax[0][1].axes.xaxis.set_visible(False)
         ax[0][1].axes.yaxis.set_visible(False)
@@ -745,9 +806,26 @@ class Plotting():
         self.X_boundary_sort = self.result[7]
         self.V_in  = self.result[8]
         print(self.V_in)
-
+        self.error3 = data[5]
+        self.error4 = data2[5]
+        print('PINN',self.error3[-1])
+        print('DNN', self.error4[-1])
         self.V_domain = torch.div(self.V_domain, 10.0)
+
+        self.error_cpu = torch.tensor(self.error3, device=device)
+        # print('error',self.error_cpu[-1])
+        print(self.error_cpu.shape)
+
+        error4_new = []
+        for i in range(len(self.error4)):
+            if i%10==0 :
+               error4_new.append(self.error4[i])
+
+        self.error2_cpu = torch.tensor(error4_new, device=device)
+        print(self.error2_cpu.shape)
+
         #print(self.V_in1)
+
 
         h = 0.02
         x_min = -8.0
@@ -864,7 +942,99 @@ class Plotting():
         ax[2].plot(U)
 
         plt.show()'''
-        
+        self.epochs = 5100
+
+        self.xmax = int(self.epochs / 5)
+
+        self.x2 = [*range(1, self.xmax + 1)]
+
+        self.xmax2 = int(self.epochs / 50)
+
+        self.x3 = [*range(1, self.xmax2 + 1)]
+
+    def error_loss_plot(self):
+
+        e= int(self.epochs/50)
+        fig,ax = plt.subplots(1,1)
+        ax.plot(self.x3,self.error_cpu, label='PINN with ADAM')
+        ax.plot(self.x3, self.error2_cpu, label='DNN with ADAM')
+        #ax[0].plot(self.x1, self.error3_cpu, label='NN Rankine oval flow cylinder error')
+        #ax[0][0].set_yscale('log')
+        ax.set_ylim(0,0.1)
+        ax.set_yticks((0,0.02,0.04,0.06,0.08,0.1))
+        ax.set_xticks((0,e/5,2*e/5,3*e/5,4*e/5,e))
+        ax.set_xticklabels((0,1000,2000,3000,4000,5000), fontsize=10)
+        ax.set_ylabel('$\epsilon$')
+        ax.set_xlabel('Epochs')
+        ax.xaxis.label.set_fontsize(15)
+        ax.yaxis.label.set_fontsize(15)
+        ax.grid()
+        #ax.legend()
+        mt.save("error_rankine.tex")
+        plt.show()
+
+    def density_plot_error(self):
+
+        u_grid_max = self.u0_grid_norm.max()
+        u_grid_min = self.u0_grid_norm.min()
+
+        v_grid_max = self.v0_grid_norm.max()
+        v_grid_min = self.v0_grid_norm.min()
+
+        fig, ax = plt.subplots(2, 2, gridspec_kw={'width_ratios': [3, 3]})
+        x1 = np.abs(np.subtract(self.u0_grid_norm, self.u_grid_norm))
+        c1 = ax[0][0].pcolormesh(self.x, self.y, x1, shading='gouraud', label='u_x_exact',
+                                 vmin=x1.min(), vmax=x1.max(), cmap=plt.get_cmap('rainbow'))
+        cbar = fig.colorbar(c1, ax=ax, aspect=50)
+        cbar.ax.tick_params(labelsize=15)
+        ax[0][0].plot(self.X_boundary_sort[:, 0], self.X_boundary_sort[:, 1], color='Black')
+        ax[0][0].hlines(y=0, xmin=-8.0, xmax=8.0, color='Black')
+        # ax[0][0].set_title('$U_{exact}$', y=-0.2)
+        ax[0][0].title.set_fontsize(15)
+        ax[0][0].axes.xaxis.set_visible(False)
+        ax[0][0].axes.yaxis.set_visible(False)
+
+        x2 = np.abs(np.subtract(self.v0_grid_norm, self.v_grid_norm))
+        c2 = ax[0][1].pcolormesh(self.x, self.y, x2, shading='gouraud', label='u_x_pred', vmin=x2.min(),
+                                 vmax=x2.max(), cmap=plt.get_cmap('rainbow'))
+        # fig.colorbar(c2, ax=ax[1][0])
+
+        ax[0][1].plot(self.X_boundary_sort[:, 0], self.X_boundary_sort[:, 1], color='Black')
+        ax[0][1].hlines(y=0, xmin=-8.0, xmax=8.0, color='Black')
+        # ax[1][0].set_title('$U_{pred}(PINN)$', y=-0.2)
+        ax[0][1].title.set_fontsize(15)
+        ax[0][1].axes.xaxis.set_visible(False)
+        ax[0][1].axes.yaxis.set_visible(False)
+
+        x3 = np.subtract(self.u0_grid_norm, self.u_NN_grid_norm)
+        c3 = ax[1][0].pcolormesh(self.x, self.y, x3, shading='gouraud',
+                                 label='u_x_exact',
+                                 vmin=x1.min(), vmax=x1.max(), cmap=plt.get_cmap('rainbow'))
+        #cbar = fig.colorbar(c1, ax=ax, aspect=50)
+        #cbar.ax.tick_params(labelsize=15)
+        ax[1][0].plot(self.X_boundary_sort[:, 0], self.X_boundary_sort[:, 1], color='Black')
+        ax[1][0].hlines(y=0, xmin=-8.0, xmax=8.0, color='Black')
+        # ax[0][0].set_title('$U_{exact}$', y=-0.2)
+        ax[1][0].title.set_fontsize(15)
+        ax[1][0].axes.xaxis.set_visible(False)
+        ax[1][0].axes.yaxis.set_visible(False)
+
+        x4 = np.subtract(self.v0_grid_norm, self.v_NN_grid_norm)
+        c4 = ax[1][1].pcolormesh(self.x, self.y, x4, shading='gouraud',
+                                 label='u_x_pred', vmin=x2.min(),
+                                 vmax=x2.max(), cmap=plt.get_cmap('rainbow'))
+        # fig.colorbar(c2, ax=ax[1][0])
+
+        ax[1][1].plot(self.X_boundary_sort[:, 0], self.X_boundary_sort[:, 1], color='Black')
+        ax[1][1].hlines(y=0, xmin=-8.0, xmax=8.0, color='Black')
+        # ax[1][0].set_title('$U_{pred}(PINN)$', y=-0.2)
+        ax[1][1].title.set_fontsize(15)
+        ax[1][1].axes.xaxis.set_visible(False)
+        ax[1][1].axes.yaxis.set_visible(False)
+
+        #mt.save("error_density_rankine.tex")
+
+        plt.show()
 
     def density_plot_norm(self):
         
@@ -1011,12 +1181,14 @@ file2 = open('result_rankine_oval_potential_flow.pkl', 'rb')
 data2 = pickle.load(file2)
 file3 = open('result_NN_rankine_oval_potential_flow.pkl', 'rb')
 data3 = pickle.load(file3)
-
+print(data2[5])
 plot = Plotting(data2,data3)
 
-plot.density_plot_norm()
+#plot.density_plot_norm()
 #plot.streamplot()
 #plot.density_plot()
+#plot.error_loss_plot()
+#plot.density_plot_error()
 
 ####################################################################################################
 
@@ -1029,5 +1201,6 @@ plot0 = Potential_flow(device,data0,data1,data2)
 
 #error_plot = plot0.error_loss_plot()
 #density = plot0.density_plot()
+error_density = plot0.density_error_plot()
 #stream = plot0.streamline()
 
