@@ -346,7 +346,7 @@ def save_state(epoch,distrib_model,loss_acc,optimizer,res_name,grank,gwsize,is_b
             print(f'DEBUG: state in {grank} is saved on epoch:{epoch} in {time.time()-rt} s')
 
 # deterministic dataloader
-def seed_worker(worker_id):
+'''def seed_worker(worker_id):
     worker_seed = torch.initial_seed() % 2**32
     np.random.seed(worker_seed)
     random.seed(worker_seed)
@@ -379,7 +379,7 @@ def par_min(field):
     res = torch.tensor(field).float()
     res = res.cuda() if args.cuda else res.cpu()
     dist.all_reduce(res,op=dist.ReduceOp.MIN,group=None,async_op=True).wait()
-    return res
+    return res'''
 
 # reduce field to destination with an operation
 def par_reduce(field,dest,oper):
@@ -418,7 +418,7 @@ def par_allgather_obj(obj,gwsize):
 
 def prediction(x,y,t):
     g = torch.cat((x, y, t), dim=1)
-    predictions = distrib_model(g)
+    predictions = model.forward(g)
     return predictions
 
 def loss(data, device):
@@ -552,37 +552,45 @@ def main():
 
     # distribute dataset to workers
     # persistent workers
-    pers_w = True if args.nworker>1 else False
+    #pers_w = True if args.nworker>1 else False
 
-    kwargs = {'worker_init_fn': seed_worker, 'generator': g} if args.testrun else {}
+    #kwargs = {'worker_init_fn': seed_worker, 'generator': g} if args.testrun else {}
 
-    train_loader = torch.utils.data.Dataloader(train_dataset, batch_size=args.batch_size,
+    '''train_loader = torch.utils.data.Dataloader(train_dataset, batch_size=args.batch_size,
                                                num_worker=args.nworker, pin_memory=True,
                                                persistent_workers=pers_w, drop_last=True,
                                                prefetch_fsactor=args.prefetch, **kwargs)
     test_loader = torch.utils.data.Dataloader(test_dataset, batch_size=2,
                                               num_worker=args.nworker, pin_memory=True,
                                               persistent_workers=pers_w, drop_last=True,
-                                              prefetch_fsactor=args.prefetch, **kwargs)
+                                              prefetch_fsactor=args.prefetch, **kwargs)'''
+
+    train_loader = torch.utils.data.Dataloader(train_dataset, batch_size=args.batch_size,
+                                               pin_memory=True, drop_last=True,
+                                               prefetch_fsactor=args.prefetch)
+    test_loader = torch.utils.data.Dataloader(test_dataset, batch_size=2,
+                                              pin_memory=True, drop_last=True,
+                                              prefetch_fsactor=args.prefetch)
 
     if grank==0:
         print(f'TIMER: read data: {time.time()-st} s\n')
 
     # create model
     layers = np.array([3, 60, 60, 60, 60, 60, 3])
+    global model
     model = Taylor_green_vortex_PINN(layers).to(device)
 
     # distribute model tpo workers
-    global distrib_model
+    '''global distrib_model
     if args.cuda:
         distrib_model = torch.nn.parellel.DistributedDataParallel(model,\
                         device_ids = [device], output_device=device)
     else:
-        distrib_model = torch.nn.parallel.DistributedDataParallel(model)
+        distrib_model = torch.nn.parallel.DistributedDataParallel(model)'''
 
     # optimizer
 
-    optimizer = torch.optim.Adam(distrib_model.parameters(), lr=args.lr, weight_decay=args.wdecay)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.wdecay)
     scheduler_lr = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=args.gamma)
 
     # resume state
@@ -597,7 +605,7 @@ def main():
             checkpoint = torch.load(program_dir + '/' + res_name, map_location=loc)
             start_epoch = checkpoint['epoch']
             best_acc = checkpoint['best_acc']
-            distrib_model.load_state_dict(checkpoint['state_dict'])
+            model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
             if grank == 0:
                 print(f'WARNING: restarting from {start_epoch} epoch')
@@ -623,7 +631,7 @@ def main():
             inputs = data[:-1][0]
 
             optimizer.zero_grad()
-            predictions = distrib_model(inputs)
+            #predictions = distrib_model(inputs)
 
             loss = loss(data, device)
 
@@ -640,7 +648,7 @@ def main():
         # if a better state is found
         is_best = loss_acc < best_acc
         if epoch % args.restart_int == 0 and not args.benchrun:
-            save_state(epoch, distrib_model, loss_acc, optimizer, res_name, grank, gwsize, is_best)
+            save_state(epoch, model, loss_acc, optimizer, res_name, grank, gwsize, is_best)
 
             # reset best_acc
             best_acc = min(loss_acc, best_acc)
@@ -655,28 +663,28 @@ def main():
     #finalise training
     # save final state
     if not args.benchrun:
-        save_state(epoch, distrib_model, loss_acc, optimizer, res_name, grank, gwsize, True)
+        save_state(epoch, model, loss_acc, optimizer, res_name, grank, gwsize, True)
     dist.barrier()
 
     if grank == 0:
-        if grank == 0:
-            print(f'\n--------------------------------------------------------')
-            print(f'DEBUG: training results:')
-            print(f'TIMER: first epoch time: {first_ep_t} s')
-            print(f'TIMER: last epoch time: {time.time() - lt} s')
-            print(f'TIMER: total epoch time: {time.time() - et} s')
-            print(f'TIMER: average epoch time: {(time.time() - et) / args.epochs} s')
-            if epoch > 0:
-                print(f'TIMER: total epoch-1 time: {time.time() - et - first_ep_t} s')
-                print(f'TIMER: average epoch-1 time: {(time.time() - et - first_ep_t) / (args.epochs - 1)} s')
-            print('DEBUG: memory req:', int(torch.cuda.memory_reserved(lrank) / 1024 / 1024), 'MB') \
-                if args.cuda else 'DEBUG: memory req: - MB'
 
-            torch.save(loss_acc_list, './loss_acc_per_ep.pt')
+        print(f'\n--------------------------------------------------------')
+        print(f'DEBUG: training results:')
+        print(f'TIMER: first epoch time: {first_ep_t} s')
+        print(f'TIMER: last epoch time: {time.time() - lt} s')
+        print(f'TIMER: total epoch time: {time.time() - et} s')
+        print(f'TIMER: average epoch time: {(time.time() - et) / args.epochs} s')
+        if epoch > 0:
+            print(f'TIMER: total epoch-1 time: {time.time() - et - first_ep_t} s')
+            print(f'TIMER: average epoch-1 time: {(time.time() - et - first_ep_t) / (args.epochs - 1)} s')
+        print('DEBUG: memory req:', int(torch.cuda.memory_reserved(lrank) / 1024 / 1024), 'MB') \
+            if args.cuda else 'DEBUG: memory req: - MB'
 
-    # testing loop
+        torch.save(loss_acc_list, './loss_acc_per_ep.pt')
+
+# testing loop
     et = time.time()
-    distrib_model.eval()
+    #model.eval()
     test_loss = 0.0
     #mean_sqr_diff = []
     #count = 0
@@ -685,9 +693,9 @@ def main():
             print(data)
             inputs = data[:-1][0]
             print(inputs)
-            predictions = distrib_model(inputs)
+            #predictions = distrib_model(inputs)
 
-            loss = loss(data, predictions)
+            loss = loss(data, device)
 
             test_loss+= loss.item()/inputs.shape[0]
 
@@ -721,7 +729,7 @@ nu = 1.516e-5
 
 n = 0.8
 
-#preprocessing = Preprocessing_Taylor_Green(rho,nu,n)
+preprocessing = Preprocessing_Taylor_Green(rho,nu,n)
 
 #preprocessing.data_generation()
 
